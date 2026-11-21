@@ -41,7 +41,7 @@ def cmd_list():
             print("CODE-DRAFT title:", m["draft_art"]["title"], "| cats:", m["draft_art"]["categories"],
                   "| byline:", m["draft_art"]["reporter_name"])
     since = (open(LAST).read().strip() if os.path.exists(LAST) else
-             (datetime.datetime.utcnow() - datetime.timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+             (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     posts = wp("/posts", params={"after": since, "per_page": 30, "status": "publish", "context": "edit",
                                  "_fields": "id,title,content,meta"})
     for p in posts:
@@ -67,12 +67,14 @@ def cmd_finish(pid, path):
     art.setdefault("reply_to_message_id", m.get("msg"))
     d = tempfile.mkdtemp()
     files = {x["file"]: x["url"] for x in m["media"]}
-    for key in ("featured_photo",):
-        if art.get(key) in files:
-            art[key] = files[art[key]]  # URL -> publish_one downloads it
+    fp = art.get("featured_photo")
+    if fp and not str(fp).startswith("http"):
+        art["featured_photo"] = files.get(fp)  # URL -> publish_one downloads it
     bp = []
     for fn in art.get("body_photos", []):
         url = files.get(fn, fn)
+        if not str(url).startswith("http"):
+            continue
         local = os.path.join(d, os.path.basename(url.split("?")[0]))
         open(local, "wb").write(http(url, headers={"User-Agent": "Mozilla/5.0"}, raw=True, timeout=60))
         bp.append(os.path.basename(local))
@@ -109,7 +111,7 @@ def cmd_fix(pid, path):
 
 def cmd_reviewed():
     os.makedirs(STATE, exist_ok=True)
-    open(LAST, "w").write(datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"))
+    open(LAST, "w").write(datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
 
 if __name__ == "__main__":
