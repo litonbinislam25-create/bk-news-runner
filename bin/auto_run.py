@@ -20,9 +20,22 @@ def recent_titles():
 
 def main():
     if os.environ.get("FORCE_DRAFT") == "1":  # connection test only: never touches Telegram updates
-        me = tg("getMe")["username"]
-        n = len(wp_publish.wp("/posts", params={"per_page": 1, "_fields": "id"}))
-        print(f"TEST OK telegram=@{me} wordpress_posts_visible={n}"); return
+        import re as _re
+        for k in ("TELEGRAM_BOT_TOKEN", "WP_USER", "WP_APP_PASSWORD", "OWNER_CHAT_ID"):
+            v = os.environ.get(k, "")
+            print(f"{k}: set={bool(v.strip())} length={len(v.strip())} spaces={v.strip().count(' ')}")
+        tokv = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+        print("TELEGRAM_BOT_TOKEN looks like a bot token:", bool(_re.fullmatch(r"\d{6,12}:[A-Za-z0-9_-]{30,}", tokv)))
+        try:
+            print("TELEGRAM OK @" + tg("getMe")["username"])
+        except Exception as e:
+            print("TELEGRAM FAIL", type(e).__name__, str(e)[:80].replace(tokv, "***") if tokv else str(e)[:80])
+        try:
+            me = wp_publish.wp("/users/me", params={"context": "edit", "_fields": "slug,roles"})
+            print("WORDPRESS OK roles=", me.get("roles"))
+        except Exception as e:
+            print("WORDPRESS FAIL", str(e)[:160])
+        return
     if not config().get("runner_enabled"):
         print("runner_enabled is false in config.json (switch-over not done yet)"); return
     st_path = os.path.join(STATE, "telegram.json")
