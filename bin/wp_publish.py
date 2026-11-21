@@ -232,6 +232,11 @@ def publish_one(d, item, art, cfg):
         with open(os.path.join(d, local), "wb") as fh:
             fh.write(blob)
         feat_file = local
+    if feat_file and art.get("photo_crop"):  # cut away another outlet's logo/banner: [x0,y0,x1,y1] as 0-1
+        from PIL import Image
+        fp = os.path.join(d, feat_file); im = Image.open(fp).convert("RGB"); W, H = im.size
+        x0, y0, x1, y1 = art["photo_crop"]
+        im.crop((int(x0 * W), int(y0 * H), int(x1 * W), int(y1 * H))).save(fp, quality=92)
     featured = upload(os.path.join(d, feat_file), alt=art.get("photo_alt") or art["title"],
                       caption=art.get("featured_caption", ""), focus_y=art.get("photo_focus_y"), blur=art.get("blur_boxes")) if feat_file else None
     body = art["body_html"]
