@@ -1,0 +1,56 @@
+name: news-bot
+# Every 5 minutes: Telegram group -> banglarkhabor24.com, code only (no AI).
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_draft:
+        description: "1 = test run: posts stay drafts, nobody is messaged"
+        default: "0"
+concurrency:
+  group: news-bot
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore bot state
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            state/telegram.json
+            state/schedule.json
+            inbox
+            done
+            logs
+          key: bot-state-${{ github.run_id }}
+          restore-keys: bot-state-
+      - run: pip install -q pillow
+      - name: Fetch and publish
+        env:
+          BOT_SECRETS: ${{ secrets.BOT_SECRETS }}
+          FORCE_DRAFT: ${{ github.event.inputs.force_draft || '0' }}
+        run: python3 bin/auto_run.py; s=$?; tail -5 logs/run.log 2>/dev/null; exit $s
+      - name: Save bot state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            state/telegram.json
+            state/schedule.json
+            inbox
+            done
+            logs
+          key: bot-state-${{ github.run_id }}
+      - name: Keep the schedule alive (GitHub stops idle schedules after 60 days)
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$(date -u +%d%H%M | cut -c1-5)" = "01000" ]; then
+            date -u > .keepalive && git config user.name news-bot && git config user.email news-bot@users.noreply.github.com
+            git add .keepalive && git commit -m "keepalive" && git push
+          fi

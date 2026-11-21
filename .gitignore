@@ -1,0 +1,9 @@
+secrets.json
+inbox/
+done/
+logs/
+state/telegram.json
+state/schedule.json
+state/last_review.txt
+__pycache__/
+*.pyc

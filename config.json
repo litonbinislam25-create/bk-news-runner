@@ -1,0 +1,26 @@
+{
+ "site_name": "বাংলার খবর",
+ "site_url": "https://banglarkhabor24.com",
+ "timezone_offset_hours": 6,
+ "mode": "publish",
+ "merge_window_minutes": 2,
+ "schedule": {
+  "max_posts_per_day": 8,
+  "min_gap_minutes": 50,
+  "day_start_hour": 8,
+  "day_end_hour": 22
+ },
+ "default_category": "জাতীয়",
+ "categories": "state/site_categories.json",
+ "default_byline": "নিজস্ব প্রতিবেদক",
+ "ack_reporters": false,
+ "brand": {
+  "navy": "#0D4568",
+  "red": "#E31E24",
+  "gold": "#F2B33D",
+  "logo_file": ""
+ },
+ "default_reporter_byline": "মাধবপুর প্রতিনিধি",
+ "telegram_channel": "@banglarkhabor24news",
+ "runner_enabled": false
+}
