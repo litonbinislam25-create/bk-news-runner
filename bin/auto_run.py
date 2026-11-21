@@ -3,7 +3,7 @@ Stories code can't finish are parked as WordPress drafts for Claude (claude_task
 import os, sys, glob, time, shutil, html, unicodedata
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
-import fetch_telegram, auto_build, wp_publish
+import fetch_telegram, auto_build, wp_publish, ai_writer
 
 N = lambda s: unicodedata.normalize("NFC", html.unescape(s or "")).strip()
 
@@ -66,6 +66,14 @@ def main():
         save_json(f, item)
         if item["status"] == "new":
             arts = auto_build.main(d)
+            for i, a in enumerate(arts):  # link / sensitive news: Claude API writes or checks it now
+                if a.get("decision") == "queue":
+                    try:
+                        r = ai_writer.resolve(d, item, a)
+                    except Exception as e:
+                        r = None; log(f"ai failed {item['id']}: {e}")
+                    if r:
+                        arts[i] = r
             for a in arts:
                 if a.get("decision") == "publish" and N(a["title"]) in titles:
                     a["decision"] = "skip"; log(f"duplicate skipped {item['id']}: {a['title']}")
