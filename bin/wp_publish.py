@@ -206,6 +206,11 @@ def publish_one(d, item, art, cfg):
     if art.get("decision") == "reject":
         log(f"rejected {item['id']}: {art.get('reject_reason')}")
         return {"status": "rejected", "title": art.get("title", ""), "reject_reason": art.get("reject_reason")}
+    dup = None if art.get("allow_duplicate") else find_duplicate(art)
+    if dup:  # OWNER RULE 2026-11-21: same story twice -> do not publish, tell the sender
+        log(f"duplicate {item['id']}: {art.get('title')} = {dup[0]}")
+        return {"status": "duplicate", "title": art.get("title", ""), "dup_id": dup[0], "dup_title": dup[1],
+                "link": f"{cfg['site_url'].rstrip('/')}/news/{dup[0]}"}
 
     N = lambda s: unicodedata.normalize("NFD", s or "").strip()  # য় can be written two ways
     site_cats = {N(c["name"]): c["id"] for c in load_json(os.path.join(STATE, "site_categories.json"), [])}
@@ -289,6 +294,8 @@ def publish_one(d, item, art, cfg):
         except Exception as e:
             log(f"reporter_name failed {p['id']}: {e}")
     log(f"posted {item['id']} -> {p['id']} ({p['status']}) {art['title']}")
+    if p["status"] in ("publish", "future"):
+        remember_published(p["id"], art["title"], body)
     return {"status": p["status"], "post_id": p["id"], "title": art["title"], "link": p.get("link"),
             "edit_url": f"{cfg['site_url'].rstrip('/')}/wp-admin/post.php?post={p['id']}&action=edit",
             "scheduled_for": post.get("date")}
@@ -389,6 +396,14 @@ def notify(item, art, r, photo):
         return
     st = load_json(os.path.join(STATE, "telegram.json"), {})
     owner = st.get("owner_chat_id")
+    if r["status"] == "duplicate":
+        try:
+            tg("sendMessage", chat_id=item["chat_id"], allow_sending_without_reply=True,
+               reply_to_message_id=art.get("reply_to_message_id") or item.get("first_message_id"),
+               text=f"ℹ️ এই নিউজটি আগেই প্রকাশ হয়েছে।\n{r['dup_title']}\n{r['link']}\nনতুন কোনো নিউজ থাকলে দিন।")
+        except Exception as e:
+            log(f"duplicate reply failed: {e}")
+        return
     if not owner or r["status"] == "skipped":
         return
     esc = html.escape
@@ -422,6 +437,59 @@ def notify(item, art, r, photo):
             tg("sendMessage", chat_id=owner, text=re.sub("<[^>]+>", "", text))
         except Exception as e2:
             log(f"notify text failed: {e2}")
+
+
+
+# ---- duplicate check (no AI): same story already published in the last 3 days? ----
+_RECENT = {"t": 0, "posts": []}
+
+
+def _plain(h):
+    h = h.split("আরও পড়ুন")[0].split("🩸")[0]
+    t = html.unescape(re.sub(r"<[^>]+>", " ", h))
+    t = re.sub(r"^[^:]{0,60}(প্রতিনিধি|ডেস্ক|প্রতিবেদক)\s*[:ঃ]", " ", t.strip())  # drop the dateline
+    return unicodedata.normalize("NFC", re.sub(r"[।,;:!?\"'‘’“”()\[\]{}\-–—./|]", " ", t)).split()
+
+
+def _shingles(words, n=3):
+    return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+
+def recent_posts(days=3):
+    if time.time() - _RECENT["t"] > 60:
+        after = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+        try:
+            ps = wp("/posts", params={"after": after, "per_page": 100, "status": "publish",
+                                     "_fields": "id,title,content", "orderby": "date"})
+        except Exception as e:
+            log(f"dup check failed: {e}"); return _RECENT["posts"]
+        _RECENT["posts"] = [(p["id"], unicodedata.normalize("NFC", html.unescape(p["title"]["rendered"])).strip(),
+                             _shingles(_plain(p["content"]["rendered"])), set(_plain(p["title"]["rendered"])))
+                            for p in ps]
+        _RECENT["t"] = time.time()
+    return _RECENT["posts"]
+
+
+def find_duplicate(art, exclude_id=None):
+    """Returns (post_id, title) of an already published post with the same story, else None."""
+    title = unicodedata.normalize("NFC", html.unescape(art.get("title") or "")).strip()
+    sh = _shingles(_plain(art.get("body_html") or ""))
+    tw = set(_plain(title))
+    for pid, ptitle, psh, ptw in recent_posts():
+        if pid == exclude_id:
+            continue
+        if title and title == ptitle:
+            return pid, ptitle
+        body = len(sh & psh) / min(len(sh), len(psh)) if sh and psh else 0
+        tsim = len(tw & ptw) / min(len(tw), len(ptw)) if tw and ptw else 0
+        if body >= 0.22 or (tsim >= 0.6 and body >= 0.1):
+            return pid, ptitle
+    return None
+
+
+def remember_published(pid, title, body_html):
+    _RECENT["posts"].insert(0, (pid, unicodedata.normalize("NFC", html.unescape(title)).strip(),
+                                _shingles(_plain(body_html)), set(_plain(title))))
 
 
 if __name__ == "__main__":

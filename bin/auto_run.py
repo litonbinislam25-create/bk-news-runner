@@ -56,7 +56,6 @@ def main():
         save_json(st_path, st)
     fetch_telegram.main()
     items = sorted(glob.glob(os.path.join(INBOX, "*", "item.json")))
-    titles = recent_titles() if items else set()
     for f in items:
         d = os.path.dirname(f)
         item = load_json(f)
@@ -74,9 +73,7 @@ def main():
                         r = None; log(f"ai failed {item['id']}: {e}")
                     if r:
                         arts[i] = r
-            for a in arts:
-                if a.get("decision") == "publish" and N(a["title"]) in titles:
-                    a["decision"] = "skip"; log(f"duplicate skipped {item['id']}: {a['title']}")
+            # duplicates are caught in wp_publish.publish_one (sender gets a reply)
             save_json(os.path.join(d, "articles.json"), arts)
         wp_publish.main(d)
         item = load_json(f) if os.path.exists(f) else None

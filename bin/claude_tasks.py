@@ -89,6 +89,8 @@ def cmd_finish(pid, path):
         cands = [f for f in os.listdir(d) if f.startswith("src_") and not f.endswith(("_16x9.jpg", "_blur.jpg"))]
         photo = os.path.join(d, cands[0]) if cands else None
     wp_publish.notify(item, art, r, photo)
+    if r["status"] == "duplicate":  # already on the site: close the queued draft, sender was told
+        cmd_drop(pid, "skip", f"একই নিউজ আগেই প্রকাশিত: {r['link']}")
     print(r["status"], r.get("link") or r.get("edit_url"))
 
 
