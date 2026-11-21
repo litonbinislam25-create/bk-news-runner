@@ -34,7 +34,14 @@ def config():
 def secrets():
     s = load_json(os.path.join(ROOT, "secrets.json"))
     if not s and os.environ.get("BOT_SECRETS"):  # GitHub Actions: one JSON secret
-        s = json.loads(os.environ["BOT_SECRETS"])
+        raw = os.environ["BOT_SECRETS"].strip().lstrip("\ufeff").strip()
+        if "{" in raw:
+            raw = raw[raw.index("{"):raw.rindex("}") + 1]
+        try:
+            s = json.loads(raw)
+        except ValueError:  # safe hint only, never the value itself
+            raise SystemExit(f"BOT_SECRETS is not JSON: length={len(raw)}, has_brace={'{' in raw}, "
+                             f"has_token_key={'telegram_bot_token' in raw}")
     if not s:
         raise SystemExit("secrets.json নেই — সেটআপ বাকি।")
     return s
