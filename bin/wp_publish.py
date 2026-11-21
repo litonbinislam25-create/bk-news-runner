@@ -18,7 +18,7 @@ def wp_base():
 def auth():
     s = secrets()
     tok = base64.b64encode(f"{s['wp_user']}:{s['wp_app_password']}".encode()).decode()
-    return {"Authorization": "Basic " + tok, "User-Agent": "BanglarKhoborNewsBot/1.0"}
+    return {"Authorization": "Basic " + tok, "User-Agent": "Mozilla/5.0 (BanglarKhabor Desk)"}
 
 
 def wp(path, body=None, method=None, params=None, _try=0):

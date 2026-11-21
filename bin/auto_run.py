@@ -40,7 +40,7 @@ def main():
             for label, pw in (("wrong-password probe", "xxxx"), ("real", os.environ.get("WP_APP_PASSWORD", ""))):
                 tok = base64.b64encode(f"{os.environ.get('WP_USER','').strip()}:{pw.strip()}".encode()).decode()
                 for hdr in ("Authorization", "X-Authorization"):
-                    req = urllib.request.Request(u + "?_fields=slug", headers={hdr: "Basic " + tok, "User-Agent": "BanglarKhoborNewsBot/1.0"})
+                    req = urllib.request.Request(u + "?_fields=slug", headers={hdr: "Basic " + tok, "User-Agent": "Mozilla/5.0 (BanglarKhabor Desk)"})
                     try:
                         print(label, hdr, "->", urllib.request.urlopen(req, timeout=30).read()[:80])
                     except urllib.error.HTTPError as h:
