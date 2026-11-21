@@ -35,6 +35,16 @@ def main():
             print("WORDPRESS OK roles=", me.get("roles"))
         except Exception as e:
             print("WORDPRESS FAIL", str(e)[:160])
+            import base64, urllib.request, urllib.error
+            u = config()["site_url"].rstrip("/") + "/wp-json/wp/v2/users/me"
+            for label, pw in (("wrong-password probe", "xxxx"), ("real", os.environ.get("WP_APP_PASSWORD", ""))):
+                tok = base64.b64encode(f"{os.environ.get('WP_USER','').strip()}:{pw.strip()}".encode()).decode()
+                for hdr in ("Authorization", "X-Authorization"):
+                    req = urllib.request.Request(u + "?_fields=slug", headers={hdr: "Basic " + tok, "User-Agent": "BanglarKhoborNewsBot/1.0"})
+                    try:
+                        print(label, hdr, "->", urllib.request.urlopen(req, timeout=30).read()[:80])
+                    except urllib.error.HTTPError as h:
+                        print(label, hdr, "->", h.code, h.read()[:120], "server=", h.headers.get("server"))
         return
     if not config().get("runner_enabled"):
         print("runner_enabled is false in config.json (switch-over not done yet)"); return
