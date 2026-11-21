@@ -40,8 +40,16 @@ def secrets():
         try:
             s = json.loads(raw)
         except ValueError:  # safe hint only, never the value itself
-            raise SystemExit(f"BOT_SECRETS is not JSON: length={len(raw)}, has_brace={'{' in raw}, "
+            if os.environ.get("TELEGRAM_BOT_TOKEN"):
+                s = {}
+            else:
+              raise SystemExit(f"BOT_SECRETS is not JSON: length={len(raw)}, has_brace={'{' in raw}, "
                              f"has_token_key={'telegram_bot_token' in raw}")
+    # GitHub: separate secrets win (e.g. the bot's own Editor user instead of the admin account)
+    for env, key in (("TELEGRAM_BOT_TOKEN", "telegram_bot_token"), ("WP_USER", "wp_user"), ("WP_APP_PASSWORD", "wp_app_password")):
+        if os.environ.get(env, "").strip():
+            s = s or {}
+            s[key] = os.environ[env].strip()
     if not s:
         raise SystemExit("secrets.json নেই — সেটআপ বাকি।")
     return s

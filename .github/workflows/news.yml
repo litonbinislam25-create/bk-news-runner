@@ -35,6 +35,9 @@ jobs:
         env:
           BOT_SECRETS: ${{ secrets.BOT_SECRETS }}
           OWNER_CHAT_ID: ${{ secrets.OWNER_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WP_USER: ${{ secrets.WP_USER }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
           FORCE_DRAFT: ${{ github.event.inputs.force_draft || '0' }}
         run: python3 bin/auto_run.py; s=$?; tail -5 logs/run.log 2>/dev/null; exit $s
       - name: Save bot state
