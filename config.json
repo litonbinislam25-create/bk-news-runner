@@ -22,5 +22,5 @@
  },
  "default_reporter_byline": "মাধবপুর প্রতিনিধি",
  "telegram_channel": "@banglarkhabor24news",
- "runner_enabled": false
+ "runner_enabled": true
 }
