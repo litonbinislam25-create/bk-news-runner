@@ -19,13 +19,17 @@ def recent_titles():
 
 
 def main():
-    if not config().get("runner_enabled") and os.environ.get("FORCE_DRAFT") != "1":
+    if os.environ.get("FORCE_DRAFT") == "1":  # connection test only: never touches Telegram updates
+        me = tg("getMe")["username"]
+        n = len(wp_publish.wp("/posts", params={"per_page": 1, "_fields": "id"}))
+        print(f"TEST OK telegram=@{me} wordpress_posts_visible={n}"); return
+    if not config().get("runner_enabled"):
         print("runner_enabled is false in config.json (switch-over not done yet)"); return
     st_path = os.path.join(STATE, "telegram.json")
     st = load_json(st_path, None)
     if st is None or not st.get("owner_chat_id"):
         st = st or {"offset": 0, "pending": [], "groups": {}, "owner_chat_id": None, "reporters": {}}
-        st["owner_chat_id"] = secrets().get("owner_chat_id")
+        st["owner_chat_id"] = secrets().get("owner_chat_id") or os.environ.get("OWNER_CHAT_ID")
         save_json(st_path, st)
     fetch_telegram.main()
     items = sorted(glob.glob(os.path.join(INBOX, "*", "item.json")))
