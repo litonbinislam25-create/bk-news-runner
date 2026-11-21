@@ -88,4 +88,16 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # One GitHub job keeps checking Telegram every 30 s for LOOP_MINUTES (GitHub's own 5-min schedule
+    # is often delayed by 15-60 min), so news still goes out within about a minute.
+    end = time.time() + float(os.environ.get("LOOP_MINUTES", "0")) * 60
+    while True:
+        try:
+            main()
+        except SystemExit:
+            raise
+        except Exception as e:
+            log(f"run error: {e}")
+        if time.time() + 30 > end or os.environ.get("FORCE_DRAFT") == "1" or not config().get("runner_enabled"):
+            break
+        time.sleep(30)

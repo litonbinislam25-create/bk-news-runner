@@ -2,7 +2,7 @@ name: news-bot
 # Every 5 minutes: Telegram group -> banglarkhabor24.com, code only (no AI).
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       force_draft:
@@ -16,7 +16,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Restore bot state
@@ -39,6 +39,7 @@ jobs:
           WP_USER: ${{ secrets.WP_USER }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
           FORCE_DRAFT: ${{ github.event.inputs.force_draft || '0' }}
+          LOOP_MINUTES: "28"
         run: python3 bin/auto_run.py; s=$?; tail -5 logs/run.log 2>/dev/null || true; exit $s
       - name: Save bot state
         if: always()
