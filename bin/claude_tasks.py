@@ -1,4 +1,5 @@
 """Claude's only jobs (owner 2026-11-21), run at 10:00 and 18:00 Dhaka:
+  python3 bin/claude_tasks.py pending         -> only queued drafts (link/sensitive news); NOTHING if none
   python3 bin/claude_tasks.py list            -> queued drafts + new posts to proof-read; prints NOTHING if none
   python3 bin/claude_tasks.py finish <id> a.json   -> publish a queued draft (a.json = one article dict, RUN.md)
   python3 bin/claude_tasks.py drop <id> skip|reject "<reason>"
@@ -27,7 +28,7 @@ def plain(h):
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", h))).strip()
 
 
-def cmd_list():
+def cmd_list(queue_only=False):
     any_ = False
     for p, m in queued():
         any_ = True
@@ -40,6 +41,8 @@ def cmd_list():
         if m.get("draft_art"):
             print("CODE-DRAFT title:", m["draft_art"]["title"], "| cats:", m["draft_art"]["categories"],
                   "| byline:", m["draft_art"]["reporter_name"])
+    if queue_only:
+        print("" if any_ else "NOTHING"); return
     since = (open(LAST).read().strip() if os.path.exists(LAST) else
              (datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(hours=12)).strftime("%Y-%m-%dT%H:%M:%SZ"))
     posts = wp("/posts", params={"after": since, "per_page": 30, "status": "publish", "context": "edit",
@@ -116,5 +119,5 @@ def cmd_reviewed():
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    {"list": lambda: cmd_list(), "finish": lambda: cmd_finish(a[1], a[2]), "drop": lambda: cmd_drop(*a[1:4]),
+    {"list": lambda: cmd_list(), "pending": lambda: cmd_list(True), "finish": lambda: cmd_finish(a[1], a[2]), "drop": lambda: cmd_drop(*a[1:4]),
      "fix": lambda: cmd_fix(a[1], a[2]), "reviewed": lambda: cmd_reviewed()}[a[0]]()
