@@ -323,6 +323,17 @@ async function renderCards(pg, n, outDir) {
   const itemHTML = (it, sep) => it.imp ? `<div class="imp${sep ? '' : ''}">${plan.imprint}</div>` :
     storyHTML(it.cont ? 'c' + it.id : it.id, { hs: it.cont ? 32 : 40, hmax: 56, img: !it.cont || !!it.pic, cont: it.cont, from: SRC[it.id], sep, kind: it.cont ? 'b' : 'f' });
   const fullBodies = async () => pg.evaluate(NN => { { for (const st of document.querySelectorAll('.st')) st.querySelector('.bd').innerHTML = '<p>' + NN[st.dataset.id].paras.join(' ') + '</p>'; } window.fitAll(); }, NN);
+  if (process.env.CARDS_ONLY) { // re-make story cards for an edition already on the site; PAGEOF = {id: page of its continuation}
+    const PO = JSON.parse(process.env.PAGEOF), jumps = Object.fromEntries(Object.entries(PO).map(([k, v]) => [k, bn(v)]));
+    const ks = Object.fromEntries(Object.entries(cuts).map(([k, v]) => [k, v.k]));
+    for (const k in NN) if (!N[k]) N[k] = NN[k];
+    for (const p of fixedP) { await setc(fixedPage(p)); await pg.evaluate(inFit, { N, ks, jumps, tg: '', promo: PROMO.toString() }); await renderCards(pg, p.n, E + '/cards'); }
+    for (const it of items.filter(i => i.cont && PO[i.id])) {
+      await setc(HEAD + `<div class="page" style="height:auto"><div class="col half" style="width:${HW}px">${itemHTML(it, false)}</div></div></body></html>`);
+      await fullBodies(); await renderCards(pg, PO[it.id], E + '/cards');
+    }
+    await br.close(); return;
+  }
   // measure
   const all = [...items, { imp: true }];
   for (const k in NN) if (!N[k]) N[k] = NN[k];

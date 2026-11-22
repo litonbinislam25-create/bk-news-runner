@@ -101,7 +101,26 @@ def publish(day):
     print('published', title, len(pages), 'pages', len(media), 'files')
 
 
+def recards(day):
+    """Replace the tap-to-read story images of an edition already on the site with cards from epaper/oneoff/<day>/."""
+    user, pw = os.environ['EPAPER_USER'].strip(), os.environ['EPAPER_APP_PASSWORD'].strip()
+    auth = {'Authorization': 'Basic ' + base64.b64encode(f'{user}:{pw}'.encode()).decode()}
+    src = os.path.join(HERE, 'oneoff', day); new = {}
+    for path in sorted(glob.glob(f'{src}/*.jpg')):
+        name = os.path.basename(path); nn = name[:-4] + '-v2.jpg'
+        j = req(f'{EP}/wp-json/wp/v2/media', open(path, 'rb').read(), {**auth, 'Content-Type': 'image/jpeg', 'Content-Disposition': f'attachment; filename="{nn}"'}, 'POST')
+        new[name] = j['source_url'].rsplit('/', 1)[1]
+    tag = 'bk-' + dt.datetime.strptime(day, '%Y-%m-%d').strftime('%d-%m-%Y')
+    pages = req(f'{EP}/wp-json/wp/v2/media?' + urllib.parse.urlencode({'search': tag + '-p', 'per_page': 20, 'context': 'edit', '_fields': 'id,source_url,alt_text'}), headers=auth)
+    for m in pages:
+        alt = m['alt_text']
+        if not alt.startswith('BKMAP'): continue
+        for a, b in new.items(): alt = alt.replace(a, b)
+        req(f'{EP}/wp-json/wp/v2/media/{m["id"]}', json.dumps({'alt_text': alt}).encode(), {**auth, 'Content-Type': 'application/json'}, 'POST')
+    print('recards', day, len(new), 'cards,', len(pages), 'pages updated')
+
+
 if __name__ == '__main__':
     act = sys.argv[1]
     day = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else (dt.datetime.now(DH) + dt.timedelta(hours=12)).date().isoformat()
-    {'build': build, 'publish': publish}[act](day)
+    {'build': build, 'publish': publish, 'recards': recards}[act](day)

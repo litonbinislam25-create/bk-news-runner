@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build | publish | build_publish"
+        description: "build | publish | build_publish | recards"
         default: "build"
       day:
         description: "edition date YYYY-MM-DD (empty = today in Bangladesh)"
@@ -34,6 +34,9 @@ jobs:
           D="${{ github.event.inputs.day }}"
           [ -z "$D" ] && D=$(TZ=Asia/Dhaka date -d '+12 hours' +%F)
           echo "DAY=$D" >> $GITHUB_ENV
+      - name: Replace story cards of an edition already online
+        if: env.ACT == 'recards'
+        run: python3 epaper/daily.py recards "$DAY"
       - name: Restore built edition
         if: env.ACT == 'publish'
         uses: actions/cache/restore@v4
@@ -42,21 +45,21 @@ jobs:
           key: epaper-${{ env.DAY }}-${{ github.run_id }}
           restore-keys: epaper-${{ env.DAY }}-
       - name: Tools
-        if: env.ACT != 'publish'
+        if: env.ACT != 'publish' && env.ACT != 'recards'
         run: |
           pip install -q pillow
           npm i -g playwright@1.49.1 >/dev/null 2>&1
           npx -y playwright@1.49.1 install --with-deps chromium >/dev/null
           echo "NODE_PATH=$(npm root -g)" >> $GITHUB_ENV
       - name: Build and send to Telegram
-        if: env.ACT != 'publish'
+        if: env.ACT != 'publish' && env.ACT != 'recards'
         run: python3 epaper/daily.py build "$DAY"
       - name: Save built edition
-        if: env.ACT != 'publish'
+        if: env.ACT != 'publish' && env.ACT != 'recards'
         uses: actions/cache/save@v4
         with:
           path: epaper/work/${{ env.DAY }}
           key: epaper-${{ env.DAY }}-${{ github.run_id }}
       - name: Publish to the e-paper site
-        if: env.ACT != 'build'
+        if: env.ACT == 'publish' || env.ACT == 'build_publish'
         run: pip install -q pillow && python3 epaper/daily.py publish "$DAY"
