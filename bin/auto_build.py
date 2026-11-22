@@ -241,6 +241,15 @@ def build_article(item, s):
         "channel_ok": not any(has(full, w) for w in NOT_CHANNEL), "reply_to_message_id": s["msg"],
         "acf_reporter": "মাধবপুর প্রতিনিধি" if madhabpur else None, "sources": [],
     }
+    if sensitive and not elect and config().get("sensitive_auto", True):
+        # OWNER 2026-11-22: reporter's sensitive news (death, murder...) goes up at once, no waiting for a check.
+        # Whole photo blurred, no second photo, never on the Telegram channel.
+        art["blur_boxes"] = [[0, 0, 1, 1]] if s["photos"] else []
+        art["body_photos"] = []
+        art["channel_ok"] = False
+        if s["photos"]:
+            art["featured_caption"] = "ছবি: সংগৃহীত"
+        return art
     if sensitive or elect:
         return {"decision": "queue", "queue_reason": ("স্পর্শকাতর: " + ", ".join(sensitive)) if sensitive
                 else "নির্বাচনী অভিযোগ, ভারসাম্য দেখা দরকার", "story": s, "draft_art": art}
