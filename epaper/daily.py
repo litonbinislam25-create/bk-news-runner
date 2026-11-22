@@ -66,8 +66,16 @@ def publish(day):
     auth = {'Authorization': 'Basic ' + base64.b64encode(f'{user}:{pw}'.encode()).decode()}
     title = plan['date']
     old = req(f'{EP}/wp-json/wp/v2/posts?' + urllib.parse.urlencode({'search': title, 'per_page': 20, '_fields': 'id,title'}))
+    rpc = xmlrpc.client.ServerProxy(f'{EP}/xmlrpc.php', allow_none=True)
+    d0 = dt.datetime.strptime(day, '%Y-%m-%d')
+    def ensure_edition():  # the theme's home page shows the newest "edition" (post type) date
+        eds = rpc.wp.getPosts(1, user, pw, {'post_type': 'edition', 'number': 10}, ['post_title'])
+        if not any(e['post_title'] == title for e in eds):
+            rpc.wp.newPost(1, user, pw, {'post_type': 'edition', 'post_status': 'publish', 'post_title': title,
+                                         'post_date': xmlrpc.client.DateTime(d0.replace(hour=0, minute=5).strftime('%Y%m%dT%H:%M:%S'))})
+            print('edition created', title)
     if any(p['title']['rendered'] == title for p in old):
-        print('already on site', title); tg('sendMessage', chat_id=owner(), text=f'ℹ️ {title} সংখ্যা আগেই সাইটে আছে।'); return
+        ensure_edition(); print('already on site', title); tg('sendMessage', chat_id=owner(), text=f'ℹ️ {title} সংখ্যা আগেই সাইটে আছে।'); return
     media = {}
     for path in sorted(glob.glob(f'{E}/up/*.jpg')):
         name = os.path.basename(path)
@@ -77,8 +85,6 @@ def publish(day):
         if name in alts:
             req(f'{EP}/wp-json/wp/v2/media/{j["id"]}', json.dumps({'alt_text': alts[name]}).encode(), {**auth, 'Content-Type': 'application/json'}, 'POST')
     # one post per page (theme PrintPaper reads custom fields page_name / epaper_one / epaper_one_id) via XML-RPC
-    rpc = xmlrpc.client.ServerProxy(f'{EP}/xmlrpc.php', allow_none=True)
-    d0 = dt.datetime.strptime(day, '%Y-%m-%d')
     pages = sorted([k for k in media if re.search(r'-p\d+\.jpg$', k)], key=lambda k: int(k.rsplit('-p', 1)[1][:-4]))
     secs = {p['n']: p['sec'] for p in plan['pages']}
     for k in pages:
@@ -90,6 +96,7 @@ def publish(day):
             'custom_fields': [{'key': 'page_name', 'value': f'পৃষ্ঠা {bn(n)} · {secs.get(n, "")}'},
                               {'key': 'epaper_one', 'value': m['source_url']},
                               {'key': 'epaper_one_id', 'value': str(m['id'])}]})
+    ensure_edition()
     tg('sendMessage', chat_id=owner(), text=f'✅ {plan["dateBn"]}-এর ই-পেপার ({bn(len(pages))} পাতা) সাইটে প্রকাশ হয়েছে।\n{EP}/')
     print('published', title, len(pages), 'pages', len(media), 'files')
 
