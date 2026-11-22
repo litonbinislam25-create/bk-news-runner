@@ -99,9 +99,13 @@ def to_16x9(path, w=1280, h=720, focus_y=None):
         else:  # too tall: crop, keep more of the top
             nh = round(im.width * 9 / 16)
             if faces:
-                # headroom above the highest head, chest below the lowest face; faces sit a bit above the middle
-                lo, hi = fy0 - fh * 0.6, fy1 + fh * 0.9
-                y = _place(im.height, nh, lo, hi, (fy0 + fy1) / 2 + nh * 0.08)
+                # owner's own sample (2026-11-22): only a little space above the highest head (hair ~0.5 face
+                # height above the detected box), faces in the upper third, people shown down to the chest
+                top = fy0 - fh * 0.7
+                if fy1 + fh * 0.3 - top <= nh:
+                    y = int(max(0, min(im.height - nh, top)))
+                else:  # faces spread too far apart vertically: keep them all, centred
+                    y = _place(im.height, nh, fy0 - fh * 0.6, fy1 + fh * 0.3, (fy0 + fy1) / 2)
             else:
                 fy = focus_y if focus_y is not None else (0.45 if r >= 1 else 0.38)  # centre of the crop (0=top, 1=bottom)
                 y = max(0, min(im.height - nh, int(fy * im.height - nh / 2)))
