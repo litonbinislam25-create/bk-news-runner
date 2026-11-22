@@ -32,13 +32,41 @@ def links_of(m):
     return res
 
 
+def epaper_button(cq, st):
+    """E-paper buttons: ep:pub:<date> starts the publish workflow, ep:hold:<date> keeps it off the site."""
+    data = cq.get("data", "")
+    owner = str(st.get("owner_chat_id") or os.environ.get("OWNER_CHAT_ID", "")).strip()
+    if not data.startswith("ep:") or str(cq["from"]["id"]) != owner:
+        tg("answerCallbackQuery", callback_query_id=cq["id"]); return
+    _, act, day = data.split(":", 2)
+    msg = cq.get("message") or {}
+    if act == "pub":
+        import urllib.request as ur
+        r = ur.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/workflows/epaper.yml/dispatches",
+                       data=json.dumps({"ref": "main", "inputs": {"action": "publish", "day": day}}).encode(), method="POST",
+                       headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"})
+        ur.urlopen(r, timeout=30).read()
+        tg("answerCallbackQuery", callback_query_id=cq["id"], text="প্রকাশ শুরু হয়েছে, কয়েক মিনিট লাগবে।")
+        note = "⏳ সাইটে তোলা হচ্ছে… শেষ হলে জানানো হবে।"
+    else:
+        tg("answerCallbackQuery", callback_query_id=cq["id"], text="ঠিক আছে, প্রকাশ আটকে রাখা হলো।")
+        note = "⏸ এই সংখ্যা প্রকাশ হয়নি। কী ভুল আছে Claude-কে লিখে জানান।"
+    if msg:
+        tg("editMessageReplyMarkup", chat_id=msg["chat"]["id"], message_id=msg["message_id"], reply_markup={"inline_keyboard": []})
+        tg("sendMessage", chat_id=msg["chat"]["id"], text=note, reply_to_message_id=msg["message_id"])
+
+
 def main():
     cfg = config()
     sec = secrets()
     st = load_json(os.path.join(STATE, "telegram.json"), {"offset": 0, "pending": [], "groups": {}, "owner_chat_id": None, "reporters": {}})
-    updates = tg("getUpdates", offset=st["offset"], timeout=0, allowed_updates=["message", "channel_post", "edited_message"])
+    updates = tg("getUpdates", offset=st["offset"], timeout=0, allowed_updates=["message", "channel_post", "edited_message", "callback_query"])
     for u in updates:
         st["offset"] = u["update_id"] + 1
+        if u.get("callback_query"):
+            try: epaper_button(u["callback_query"], st)
+            except Exception as ex: print("epaper button error", ex)
+            continue
         m = u.get("message") or u.get("channel_post") or u.get("edited_message")
         if not m:
             continue

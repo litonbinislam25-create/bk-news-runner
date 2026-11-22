@@ -1,0 +1,62 @@
+name: epaper
+# Every night 00:05 Bangladesh time: build the e-paper from the previous day's news (00:00-23:59), send PDF + 2 buttons to the owner on Telegram.
+# The "publish" button (handled by the news workflow) starts this workflow again with action=publish. Code only, no AI.
+on:
+  schedule:
+    - cron: "5 18 * * *"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "build | publish | build_publish"
+        default: "build"
+      day:
+        description: "edition date YYYY-MM-DD (empty = today in Bangladesh)"
+        default: ""
+concurrency:
+  group: epaper
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      OWNER_CHAT_ID: ${{ secrets.OWNER_CHAT_ID }}
+      EPAPER_USER: ${{ secrets.EPAPER_USER }}
+      EPAPER_APP_PASSWORD: ${{ secrets.EPAPER_APP_PASSWORD }}
+      ACT: ${{ github.event.inputs.action || 'build' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Edition date
+        run: |
+          D="${{ github.event.inputs.day }}"
+          [ -z "$D" ] && D=$(TZ=Asia/Dhaka date -d '+12 hours' +%F)
+          echo "DAY=$D" >> $GITHUB_ENV
+      - name: Restore built edition
+        if: env.ACT == 'publish'
+        uses: actions/cache/restore@v4
+        with:
+          path: epaper/work/${{ env.DAY }}
+          key: epaper-${{ env.DAY }}-${{ github.run_id }}
+          restore-keys: epaper-${{ env.DAY }}-
+      - name: Tools
+        if: env.ACT != 'publish'
+        run: |
+          pip install -q pillow
+          npm i -g playwright@1.49.1 >/dev/null 2>&1
+          npx -y playwright@1.49.1 install --with-deps chromium >/dev/null
+          echo "NODE_PATH=$(npm root -g)" >> $GITHUB_ENV
+      - name: Build and send to Telegram
+        if: env.ACT != 'publish'
+        run: python3 epaper/daily.py build "$DAY"
+      - name: Save built edition
+        if: env.ACT != 'publish'
+        uses: actions/cache/save@v4
+        with:
+          path: epaper/work/${{ env.DAY }}
+          key: epaper-${{ env.DAY }}-${{ github.run_id }}
+      - name: Publish to the e-paper site
+        if: env.ACT != 'build'
+        run: pip install -q pillow && python3 epaper/daily.py publish "$DAY"
