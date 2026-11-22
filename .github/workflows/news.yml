@@ -31,7 +31,7 @@ jobs:
             logs
           key: bot-state-${{ github.run_id }}
           restore-keys: bot-state-
-      - run: pip install -q pillow anthropic
+      - run: pip install -q pillow anthropic "opencv-python-headless<5"
       - name: Fetch and publish
         env:
           BOT_SECRETS: ${{ secrets.BOT_SECRETS }}

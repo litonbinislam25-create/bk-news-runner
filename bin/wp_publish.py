@@ -41,20 +41,70 @@ def wp(path, body=None, method=None, params=None, _try=0):
         raise
 
 
+def find_faces(im):
+    """Face boxes (x0,y0,x1,y1 in pixels of im) via OpenCV Haar cascades; [] if OpenCV is missing or nothing found."""
+    try:
+        import cv2, numpy as np
+    except Exception:
+        return []
+    sc = min(1.0, 900 / max(im.width, im.height))
+    small = im.resize((max(1, int(im.width * sc)), max(1, int(im.height * sc))))
+    g = cv2.equalizeHist(cv2.cvtColor(np.array(small), cv2.COLOR_RGB2GRAY))
+    mn = max(24, int(min(g.shape) * 0.06))
+    boxes = []
+    for name, flip in (("haarcascade_frontalface_default.xml", False), ("haarcascade_profileface.xml", False),
+                       ("haarcascade_profileface.xml", True)):
+        cc = cv2.CascadeClassifier(cv2.data.haarcascades + name)
+        img = cv2.flip(g, 1) if flip else g
+        for (x, y, w, h) in cc.detectMultiScale(img, scaleFactor=1.1, minNeighbors=6, minSize=(mn, mn)):
+            if flip:
+                x = g.shape[1] - x - w
+            boxes.append((x / sc, y / sc, (x + w) / sc, (y + h) / sc))
+    if not boxes:
+        return []
+    big = max((b[2] - b[0]) for b in boxes)  # drop tiny far-away faces / false hits
+    return [b for b in boxes if (b[2] - b[0]) >= big * 0.4]
+
+
+def _place(total, size, lo, hi, want):
+    """Start of a window of `size` in [0,total] that keeps [lo,hi] inside if possible, aiming its centre at `want`."""
+    start = want - size / 2
+    if hi - lo <= size:
+        start = min(max(start, hi - size), lo)
+    else:
+        start = (lo + hi) / 2 - size / 2
+    return int(max(0, min(total - size, start)))
+
+
 def to_16x9(path, w=1280, h=720, focus_y=None):
-    """OWNER RULE: every image on the site is 16:9. Landscape-ish photos are cropped (slightly
-    top-biased so heads stay in); portrait photos are cover-cropped (top-biased); only ultra-wide panoramas go on blur."""
+    """OWNER RULE: every image on the site is 16:9. Landscape-ish photos are cropped, portrait photos are
+    cover-cropped; only ultra-wide panoramas go on blur. Owner 2026-11-22: people must be clearly visible, so the
+    crop window follows the detected faces (with headroom and the upper body below); without faces: old top-biased rule."""
     from PIL import Image, ImageFilter, ImageOps
     im = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
     r = im.width / im.height
     if r <= 2.3:  # owner 2026-11-20: portrait photos are cover-cropped too (no small photo on blur)
+        faces = [] if focus_y is not None else find_faces(im)
+        if faces:
+            fx0 = min(b[0] for b in faces); fx1 = max(b[2] for b in faces)
+            fy0 = min(b[1] for b in faces); fy1 = max(b[3] for b in faces)
+            fh = max(b[3] - b[1] for b in faces)
         if r > 16 / 9:  # too wide: crop sides
-            nw = round(im.height * 16 / 9); x = (im.width - nw) // 2
+            nw = round(im.height * 16 / 9)
+            if faces:
+                x = _place(im.width, nw, fx0 - fh * 0.3, fx1 + fh * 0.3, (fx0 + fx1) / 2)
+            else:
+                x = (im.width - nw) // 2
             im = im.crop((x, 0, x + nw, im.height))
         else:  # too tall: crop, keep more of the top
             nh = round(im.width * 9 / 16)
-            fy = focus_y if focus_y is not None else (0.45 if r >= 1 else 0.38)  # centre of the crop (0=top, 1=bottom)
-            y = max(0, min(im.height - nh, int(fy * im.height - nh / 2)))
+            if faces:
+                # headroom above the highest head, chest below the lowest face; faces sit a bit above the middle
+                lo, hi = fy0 - fh * 0.6, fy1 + fh * 0.9
+                y = _place(im.height, nh, lo, hi, (fy0 + fy1) / 2 + nh * 0.08)
+            else:
+                fy = focus_y if focus_y is not None else (0.45 if r >= 1 else 0.38)  # centre of the crop (0=top, 1=bottom)
+                y = max(0, min(im.height - nh, int(fy * im.height - nh / 2)))
             im = im.crop((0, y, im.width, y + nh))
         out = im.resize((w, h), Image.LANCZOS)
     else:
