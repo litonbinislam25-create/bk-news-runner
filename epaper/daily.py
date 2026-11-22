@@ -107,7 +107,7 @@ def recards(day):
     auth = {'Authorization': 'Basic ' + base64.b64encode(f'{user}:{pw}'.encode()).decode()}
     src = os.path.join(HERE, 'oneoff', day); new = {}
     for path in sorted(glob.glob(f'{src}/*.jpg')):
-        name = os.path.basename(path); nn = name[:-4] + '-v2.jpg'
+        name = os.path.basename(path); nn = name[:-4] + '-' + os.environ.get('CARD_VER', 'v2') + '.jpg'
         j = req(f'{EP}/wp-json/wp/v2/media', open(path, 'rb').read(), {**auth, 'Content-Type': 'image/jpeg', 'Content-Disposition': f'attachment; filename="{nn}"'}, 'POST')
         new[name] = j['source_url'].rsplit('/', 1)[1]
     tag = 'bk-' + dt.datetime.strptime(day, '%Y-%m-%d').strftime('%d-%m-%Y')
@@ -115,7 +115,7 @@ def recards(day):
     for m in pages:
         alt = m['alt_text']
         if not alt.startswith('BKMAP'): continue
-        for a, b in new.items(): alt = alt.replace(a, b)
+        for a, b in new.items(): alt = re.sub(re.escape(a[:-4]) + r'(-v\d+)?\.jpg', b, alt)
         req(f'{EP}/wp-json/wp/v2/media/{m["id"]}', json.dumps({'alt_text': alt}).encode(), {**auth, 'Content-Type': 'application/json'}, 'POST')
     print('recards', day, len(new), 'cards,', len(pages), 'pages updated')
 

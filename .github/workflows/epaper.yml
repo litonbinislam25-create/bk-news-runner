@@ -36,7 +36,7 @@ jobs:
           echo "DAY=$D" >> $GITHUB_ENV
       - name: Replace story cards of an edition already online
         if: env.ACT == 'recards'
-        run: python3 epaper/daily.py recards "$DAY"
+        run: CARD_VER=v$GITHUB_RUN_NUMBER python3 epaper/daily.py recards "$DAY"
       - name: Restore built edition
         if: env.ACT == 'publish'
         uses: actions/cache/restore@v4

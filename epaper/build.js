@@ -296,7 +296,19 @@ async function renderCards(pg, n, outDir) {
   for (const d of ds) {
     const sid = d.id.replace(/^c/, ''), name = d.kind === 'f' ? `${TAG}-${sid}.jpg` : `${TAG}-${sid}-${d.kind === 'b' ? 'b' : 'a'}.jpg`;
     fs.writeFileSync(E + '/_c.html', cardHTML(d, n)); await cp.goto('file://' + E + '/_c.html');
-    await cp.evaluate(() => document.fonts.ready); await cp.evaluate(() => window.fitAll()); await cp.waitForTimeout(80);
+    await cp.evaluate(() => document.fonts.ready); await cp.evaluate(() => { // headline edge to edge: short = one full-width line, long = two lines each stretched to full width
+      const h = document.querySelector('#card h2'); if (!h) return;
+      const ws = (h.dataset.t || h.textContent).trim().split(/ +/); h.dataset.t = ws.join(' ');
+      const W = h.clientWidth - 2, m = document.createElement('span');
+      m.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-family:Lalsalu;font-weight:700;font-size:50px;-webkit-text-stroke:.5px'; document.body.appendChild(m);
+      const wid = t => { m.textContent = t; return m.offsetWidth; };
+      const line = (t, f) => `<span style="display:block;white-space:nowrap;font-size:${f.toFixed(1)}px;line-height:1.18">${t}</span>`;
+      const one = 50 * W / wid(ws.join(' '));
+      if (one >= 46 || ws.length < 2) { h.innerHTML = line(ws.join(' '), Math.min(one, 90)); }
+      else { let b = null; for (let i = 1; i < ws.length; i++) { const a = wid(ws.slice(0, i).join(' ')), c = wid(ws.slice(i).join(' ')), sc = Math.min(a, c) / Math.max(a, c); if (!b || sc > b.sc) b = { i, a, c, sc }; }
+        h.innerHTML = line(ws.slice(0, b.i).join(' '), 50 * W / b.a) + line(ws.slice(b.i).join(' '), 50 * W / b.c); }
+      h.style.textAlign = 'left'; h.style.textAlignLast = 'left';
+      m.remove(); }); await cp.waitForTimeout(80);
     await (await cp.$('#card')).screenshot({ path: `${outDir}/${name}`, type: 'jpeg', quality: 86 });
   }
 }
