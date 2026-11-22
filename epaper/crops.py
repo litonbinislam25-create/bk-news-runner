@@ -23,7 +23,8 @@ for n, items in M.items():
         parts = [box(r) for r in it['rects']]
         cw = max(p.width for p in parts); im = Image.new('RGB', (cw, sum(p.height for p in parts)), 'white'); y = 0
         for p in parts: im.paste(p, ((cw - p.width) // 2, y)); y += p.height
-        brand(im).save(f'{E}/up/{name}', quality=88)
+        if os.path.exists(f'{E}/cards/{name}'): shutil.copy(f'{E}/cards/{name}', f'{E}/up/{name}')  # designed story card
+        else: brand(im).save(f'{E}/up/{name}', quality=88)
         its.append({'title': N[sid]['title'], 'img': name, 'rects': it['rects']})
     alts[pf] = 'BKMAP' + json.dumps({'items': its}, ensure_ascii=False, separators=(',', ':'))
 json.dump(alts, open(f'{E}/alts.json', 'w'), ensure_ascii=False)

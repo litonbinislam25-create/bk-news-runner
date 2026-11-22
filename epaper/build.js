@@ -5,7 +5,7 @@ const E = path.resolve(process.argv[2]), A = path.resolve(__dirname, 'assets'), 
 const plan = JSON.parse(fs.readFileSync(E + '/plan.json'));
 const N = JSON.parse(fs.readFileSync(E + '/news.json'));
 let TOTALP = 8;
-const TG = 'file://' + require('path').resolve(__dirname, 'assets/qr_tg.png');
+const TG = 'file://' + require('path').resolve(__dirname, 'assets') + '/';
 const W = 1123, H = 1587, PX = 44, TAG = plan.tag, GAP = 26;
 const LW = Math.round((W - 2 * PX - GAP) * 0.55), RW = W - 2 * PX - GAP - LW, HALF = (W - 2 * PX - GAP) / 2;
 const bn = n => String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]);
@@ -85,12 +85,27 @@ body{background:#fff;width:${W}px}
 .imp b{font-weight:700}
 `;
 
-const PROMO = (h, src) => { const q = Math.max(90, Math.min(220, h - 150));
-  return `<div class="promo" style="height:${h}px;border:2px solid #229ed9;border-radius:6px;background:#eef8fd;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:10px;font-family:Lalsalu;overflow:hidden">
-<div style="color:#0d4568;font-size:${h > 300 ? 30 : 22}px;font-weight:700;line-height:1.25">সবার আগে খবর পেতে<br>টেলিগ্রাম চ্যানেলে যুক্ত হোন</div>
-<img src="${src}" style="width:${q}px;height:${q}px;background:#fff;padding:4px;border-radius:4px">
-<div style="background:#229ed9;color:#fff;font-size:17px;padding:3px 14px;border-radius:14px">t.me/banglarkhabor24news</div>
-${h > 360 ? '<div style="color:#333;font-size:15px">কিউআর কোড স্ক্যান করুন · প্রতিদিনের ই-পেপার ও তাজা খবর</div>' : ''}</div>`; };
+const PROMO = (H, A) => { // fills empty space: Telegram / Facebook QR boxes, blood-donation banner, house ads
+  window.__pk = (window.__pk || 0);
+  const qr = (h, tg) => { const q = Math.max(90, Math.min(220, h - 150)), c = tg ? '#229ed9' : '#1877f2';
+    return [h, `<div style="height:${h}px;border:2px solid ${c};border-radius:6px;background:${tg ? '#eef8fd' : '#eef3fd'};display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:10px;font-family:Lalsalu;overflow:hidden">
+<div style="color:#0d4568;font-size:${h > 300 ? 30 : 22}px;font-weight:700;line-height:1.25">${tg ? 'সবার আগে খবর পেতে<br>টেলিগ্রাম চ্যানেলে যুক্ত হোন' : 'দেশের সকল খবর জানতে<br>ফেসবুকে আমাদের ফলো করুন'}</div>
+<img src="${A}${tg ? 'qr_tg.png' : 'qr_fb.png'}" style="width:${q}px;height:${q}px;background:#fff;padding:4px;border-radius:4px">
+<div style="background:${c};color:#fff;font-size:17px;padding:3px 14px;border-radius:14px">${tg ? 't.me/banglarkhabor24news' : 'facebook · বাংলার খবর'}</div></div>`]; };
+  const ad = (h, f) => [h, `<div class="ad" style="height:${h}px;display:flex;align-items:center;justify-content:center;background:#fff"><div class="lb">বিজ্ঞাপন</div><img src="${A}${f}" style="max-height:${h - 4}px;width:auto;max-width:100%;object-fit:contain"></div>`];
+  const blood = w => { const h = Math.round(w * 9 / 16); return [h, `<div style="height:${h}px"><img src="${A}blood.png" style="width:100%;height:100%;display:block;border:1px solid #9e1219"></div>`]; };
+  const ADS = ['ad_sunni.jpg', 'ad_jamia.jpg', 'ad_epaper.jpg'];
+  let rem = H, out = [];
+  while (rem > 130) {
+    const k = window.__pk++; let p;
+    if (rem >= 600 && k % 3 !== 2) p = ad(Math.min(rem, 780), ADS[k % 3]);
+    else if (rem >= 320 && k % 2 === 0) p = blood(500);
+    else p = qr(Math.min(rem, 420), k % 2 === 0);
+    if (p[0] > rem) p = qr(rem, true);
+    out.push(p[1]); rem -= p[0] + 12;
+  }
+  return out.map((x, i) => `<div class="promo" style="margin-top:${i ? 12 : 0}px">${x}</div>`).join('');
+};
 const FIXH = `window.fitAll=function(){
 const m=document.createElement('span');m.style.cssText='position:absolute;visibility:hidden;white-space:nowrap;font-family:Lalsalu;font-weight:700;font-size:50px;-webkit-text-stroke:.5px';document.body.appendChild(m);
 const wid=t=>{m.textContent=t;return m.offsetWidth};
@@ -222,6 +237,17 @@ function inRects() {
   const over = [...document.querySelectorAll('.col,.half')].map((c, i) => [i, c.scrollHeight - c.clientHeight, c.clientHeight]).filter(v => v[1] > 1);
   return { items, over };
 }
+function inCards() {
+  return [...document.querySelectorAll('.st')].map(st => {
+    const q = sel => st.querySelector(sel);
+    const lead = st.dataset.kind === 'lead', lh = document.getElementById('lh');
+    const h = lead ? lh.querySelector('h1') : q('h2');
+    return { id: st.dataset.id, kind: st.dataset.kind, lead,
+      kk: (lead ? (lh.querySelector('.kk') || {}).textContent : (q('.kk') || {}).textContent) || '',
+      title: h ? (h.dataset.t || h.textContent).trim() : '', img: (q('figure img') || {}).src || '', cap: (q('figcaption') || {}).textContent || '',
+      by: (q('.by') || {}).textContent || '', ct: (q('.ct') || {}).textContent || '', bd: q('.bd').innerHTML };
+  });
+}
 function inMeasure() { return [...document.querySelectorAll('.mi')].map(e => e.offsetHeight); }
 function inStretch([C, tg, promo]) { const PR = eval(promo);
   const res = [];
@@ -247,9 +273,37 @@ function inStretch([C, tg, promo]) { const PR = eval(promo);
   }
   return res;
 }
+// ---------- per-story cards (shown when a reader taps a story) ----------
+const CW = 700;
+const cardHTML = (d, n) => HEAD.replace('<body>', `<body style="width:${CW}px">`) + `<div id="card" style="width:${CW}px;background:#fff;position:relative;font-family:Lalsalu;overflow:hidden">
+<img src="file://${A}/wm.png" style="position:absolute;width:520px;left:90px;top:420px;opacity:.06;transform:rotate(-18deg)">
+<div style="background:var(--navy);height:118px;display:flex;align-items:center;justify-content:space-between;padding:0 14px">
+<img src="${logo}" style="height:96px">
+<div style="display:flex;align-items:center;gap:12px"><div style="color:#fff;text-align:right;font-size:16px;line-height:1.5">দৈনিক বাংলার খবর ই-পেপার<br>${plan.dateBn2}<br><span class="pill" style="font-size:16px">পৃষ্ঠা ${bn(n)}</span></div>
+<div style="background:#fff;border-radius:6px;padding:4px 4px 1px;text-align:center;font-size:9px;color:#1f4e8c"><img src="${qr}" style="width:84px;height:84px;display:block">ফেসবুকে আমরা</div></div></div>
+<div class="st z" style="padding:12px 14px 6px">
+${d.ct ? `<div class="ct">${esc(d.ct)}</div>` : ''}${d.kk ? `<div class="kk">${esc(d.kk)}</div>` : ''}
+<h2 data-fit="fill" data-max="${d.lead ? 60 : 44}" style="color:${d.lead ? 'var(--red)' : (d.kind === 'a' && n === 1 ? 'var(--navy)' : 'var(--ink)')};font-size:40px;border-bottom:${d.lead ? '2px solid #222;padding-bottom:10px' : '0'}">${esc(d.title)}</h2>
+${d.img ? `<figure style="margin-top:8px"><img src="${d.img}"><figcaption>${esc(d.cap)}</figcaption></figure>` : ''}
+${d.by ? `<div class="by">${esc(d.by)}</div>` : ''}
+<div class="bd" style="font-size:17px">${d.bd}</div></div>
+<div style="background:var(--navy);color:#fff;display:flex;justify-content:space-between;padding:8px 14px;font-size:14px;margin-top:6px"><span>banglarkhabor24.com</span><span>সত্যের সন্ধানে অক্লান্ত</span></div></div></body></html>`;
+let CARDPG = null;
+async function renderCards(pg, n, outDir) {
+  const ds = await pg.evaluate(inCards);
+  fs.mkdirSync(outDir, { recursive: true });
+  const cp = CARDPG;
+  for (const d of ds) {
+    const sid = d.id.replace(/^c/, ''), name = d.kind === 'f' ? `${TAG}-${sid}.jpg` : `${TAG}-${sid}-${d.kind === 'b' ? 'b' : 'a'}.jpg`;
+    fs.writeFileSync(E + '/_c.html', cardHTML(d, n)); await cp.goto('file://' + E + '/_c.html');
+    await cp.evaluate(() => document.fonts.ready); await cp.evaluate(() => window.fitAll()); await cp.waitForTimeout(80);
+    await (await cp.$('#card')).screenshot({ path: `${outDir}/${name}`, type: 'jpeg', quality: 86 });
+  }
+}
 // ---------- main ----------
 (async () => {
   const br = await chromium.launch();
+  CARDPG = await br.newPage({ viewport: { width: CW, height: 1000 }, deviceScaleFactor: 2 });
   const pg = await br.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: plan.dsf || 3 });
   const outDir = E + '/out'; fs.mkdirSync(outDir, { recursive: true });
   const setc = async html => { fs.writeFileSync(E + '/_p.html', html); await pg.goto('file://' + E + '/_p.html'); await pg.evaluate(() => document.fonts.ready); await pg.waitForTimeout(150); };
@@ -295,7 +349,7 @@ function inStretch([C, tg, promo]) { const PR = eval(promo);
   // pack: imprint fixed to last half; LPT on the rest
   const imp = all.at(-1); let rest0 = all.slice(0, -1); const CAPX = C - (+process.env.MG || 30);
   let best = null;
-  let NP = Math.max(1, Math.min(4, Math.ceil(tot / (2 * CAPX * 0.9)))); // continuation pages actually needed
+  let NP = 4; // owner: always 8 pages; empty space gets photos, house ads and QR boxes
   for (let drop = 0; !best && drop < 40; drop++) {
   if (drop && NP < 4) { NP++; drop = 0; }
   else if (drop) { const li = rest0.map(x => !x.cont).lastIndexOf(true); if (li < 0) break; console.log('DROP', rest0[li].id); rest0.splice(li, 1); }
@@ -320,6 +374,7 @@ function inStretch([C, tg, promo]) { const PR = eval(promo);
     await setc(fixedPage(p)); await pg.evaluate(inFit, { N, ks, jumps, tg: TG, promo: PROMO.toString() });
     const r = await pg.evaluate(inRects); map[p.n] = r.items; if (r.over.length) console.log('OVER p' + p.n, r.over);
     await pg.screenshot({ path: `${outDir}/${TAG}-p${p.n}.jpg`, type: 'jpeg', quality: 90 });
+    await renderCards(pg, p.n, E + '/cards');
   }
   TOTALP = 4 + NP; console.log('PAGES', TOTALP);
   for (let n = 5; n <= TOTALP; n++) {
@@ -330,6 +385,7 @@ function inStretch([C, tg, promo]) { const PR = eval(promo);
     console.log('SLACK p' + n, await pg.evaluate(inStretch, [C, TG, PROMO.toString()]));
     const r = await pg.evaluate(inRects); map[n] = r.items; if (r.over.length) console.log('OVER p' + n, r.over);
     await pg.screenshot({ path: `${outDir}/${TAG}-p${n}.jpg`, type: 'jpeg', quality: 90 });
+    await renderCards(pg, n, E + '/cards');
   }
   fs.writeFileSync(E + '/map.json', JSON.stringify(map));
   await br.close();
