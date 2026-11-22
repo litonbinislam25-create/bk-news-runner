@@ -42,7 +42,7 @@ def owner(): return os.environ['OWNER_CHAT_ID'].strip()
 
 def build(day):
     E = os.path.join(WORK, day); os.makedirs(E, exist_ok=True)
-    py = [sys.executable, '-I']
+    py = [sys.executable]
     subprocess.run(py + [os.path.join(HERE, 'auto_fetch.py'), E, day], check=True)
     plan = json.load(open(f'{E}/plan.json'))
     subprocess.run(['node', os.path.join(HERE, 'build.js'), E], check=True, env={**os.environ, 'MG': '80'})
