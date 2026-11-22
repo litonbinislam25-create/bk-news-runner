@@ -1,5 +1,7 @@
 name: news-bot
-# Every 5 minutes: Telegram group -> banglarkhabor24.com, code only (no AI).
+# Telegram group -> banglarkhabor24.com, code only (no AI).
+# Each job checks Telegram every 30 s for 55 min, then starts the next job itself, so there is
+# no gap. The schedule below only restarts the chain if it ever breaks (GitHub runs it late).
 on:
   schedule:
     - cron: "*/10 * * * *"
@@ -17,7 +19,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
       - name: Restore bot state
@@ -41,7 +43,7 @@ jobs:
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           FORCE_DRAFT: ${{ github.event.inputs.force_draft || '0' }}
-          LOOP_MINUTES: "28"
+          LOOP_MINUTES: "55"
           GH_TOKEN: ${{ github.token }}
         run: python3 bin/auto_run.py; s=$?; tail -5 logs/run.log 2>/dev/null || true; exit $s
       - name: Save bot state
@@ -62,3 +64,14 @@ jobs:
             date -u > .keepalive && git config user.name news-bot && git config user.email news-bot@users.noreply.github.com
             git add .keepalive && git commit -m "keepalive" && git push
           fi
+      - name: Start the next job right away (no gap between jobs)
+        if: always() && github.event.inputs.force_draft != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          on=$(python3 -c "import json;print(json.load(open('config.json')).get('runner_enabled', False))")
+          [ "$on" = "True" ] || { echo "runner disabled"; exit 0; }
+          waiting=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/news.yml/runs?status=queued&per_page=5" --jq '.total_count' || echo 0)
+          pending=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/news.yml/runs?status=pending&per_page=5" --jq '.total_count' || echo 0)
+          if [ "$waiting" != "0" ] || [ "$pending" != "0" ]; then echo "next job already waiting"; exit 0; fi
+          gh workflow run news.yml --ref "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY"
