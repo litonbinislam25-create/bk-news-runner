@@ -94,7 +94,7 @@ const PROMO = (H, A) => { // fills empty space: Telegram / Facebook QR boxes, bl
 <div style="background:${c};color:#fff;font-size:17px;padding:3px 14px;border-radius:14px">${tg ? 't.me/banglarkhabor24news' : 'facebook · বাংলার খবর'}</div></div>`]; };
   const ad = (h, f) => [h, `<div class="ad" style="height:${h}px;display:flex;align-items:center;justify-content:center;background:#fff"><div class="lb">বিজ্ঞাপন</div><img src="${A}${f}" style="max-height:${h - 4}px;width:auto;max-width:100%;object-fit:contain"></div>`];
   const blood = w => { const h = Math.round(w * 9 / 16); return [h, `<div style="height:${h}px"><img src="${A}blood.png" style="width:100%;height:100%;display:block;border:1px solid #9e1219"></div>`]; };
-  const ADS = ['ad_sunni.jpg', 'ad_jamia.jpg', 'ad_epaper.jpg'];
+  const ADS = ['ad_sunni.jpg', 'ad_epaper.jpg', 'ad_sunni.jpg'];
   let rem = H, out = [];
   while (rem > 130) {
     const k = window.__pk++; let p;

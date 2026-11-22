@@ -122,12 +122,14 @@ def secname(ms, dflt):
     ks = [N[m['id']]['kick'] for m in ms]
     if all(m['local'] for m in ms) and ms: return 'হবিগঞ্জ'
     return dflt
-AD = ['ad_epaper.jpg', 'ad_jamia.jpg', 'ad_sunni.jpg']
+AD = ['ad_epaper.jpg', None, 'ad_sunni.jpg']  # page 3 has no ad (owner 2026-11-23); ad_jamia.jpg not used
 pages = [{'n': 1, 'sec': 'প্রথম পাতা', 'lead': lead[0]['id'], 'right': [m['id'] for m in right]}]
 for i, (ms, dflt) in enumerate([(p2, 'হবিগঞ্জ'), (p3, 'জাতীয়'), (p4, 'সারাদেশ')]):
     if not ms: ms = []
     ms = sorted(ms, key=lambda m: (m['img'], m['words']))  # best photo story goes under the ad
     ids = [ref(m) for m in ms]
+    if AD[i] is None:
+        pages.append({'n': i + 2, 'sec': secname(ms, dflt), 'left': ids[:2], 'right': ids[2:]}); continue
     if len(ids) < 3: ids = ids[:1] + [None] + ids[1:]  # keep a story under the ad
     pages.append({'n': i + 2, 'sec': secname(ms, dflt), 'left': [x for x in ids[:2] if x], 'right': [{'ad': AD[i]}] + ids[2:]})
 for n in range(5, 9): pages.append({'n': n, 'sec': 'বাকি অংশ'})

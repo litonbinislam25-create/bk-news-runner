@@ -1,9 +1,7 @@
 name: epaper
-# Every night 00:05 Bangladesh time: build the e-paper from the previous day's news (00:00-23:59), send PDF + 2 buttons to the owner on Telegram.
+# Every night 00:05 Bangladesh time (started by the news workflow, bin/fetch_telegram.py epaper_timer, because GitHub's cron runs late): build the e-paper from the previous day's news (00:00-23:59), send PDF + 2 buttons to the owner on Telegram.
 # The "publish" button (handled by the news workflow) starts this workflow again with action=publish. Code only, no AI.
 on:
-  schedule:
-    - cron: "5 18 * * *"
   workflow_dispatch:
     inputs:
       action:

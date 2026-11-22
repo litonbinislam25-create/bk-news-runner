@@ -56,7 +56,27 @@ def epaper_button(cq, st):
         tg("sendMessage", chat_id=msg["chat"]["id"], text=note, reply_to_message_id=msg["message_id"])
 
 
+def epaper_timer():
+    """Start the nightly e-paper build at 00:05 Dhaka (GitHub's own cron often runs an hour late).
+    Stateless: does nothing if an e-paper run was already started since 00:04 Dhaka today."""
+    import datetime as dt, urllib.request as ur
+    now = dt.datetime.utcnow() + dt.timedelta(hours=6)
+    if not (now.hour == 0 and now.minute >= 5 or 1 <= now.hour < 4) or not os.environ.get("GH_TOKEN"):
+        return
+    since = (now.replace(hour=0, minute=4, second=0, microsecond=0) - dt.timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    api = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/workflows/epaper.yml"
+    h = {"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"}
+    runs = json.loads(ur.urlopen(ur.Request(f"{api}/runs?created=%3E%3D{since}&per_page=30", headers=h), timeout=30).read())
+    if runs.get("total_count"):  # built already (cron, manual run or an earlier check)
+        return
+    ur.urlopen(ur.Request(f"{api}/dispatches", data=json.dumps({"ref": "main", "inputs": {"action": "build", "day": now.date().isoformat()}}).encode(),
+                          method="POST", headers=h), timeout=30).read()
+    log(f"epaper: nightly build started for {now.date()}")
+
+
 def main():
+    try: epaper_timer()
+    except Exception as ex: print("epaper timer error", ex)
     cfg = config()
     sec = secrets()
     st = load_json(os.path.join(STATE, "telegram.json"), {"offset": 0, "pending": [], "groups": {}, "owner_chat_id": None, "reporters": {}})
