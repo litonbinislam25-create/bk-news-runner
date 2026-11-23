@@ -320,7 +320,7 @@ async function renderCards(pg, n, outDir) {
   const outDir = E + '/out'; fs.mkdirSync(outDir, { recursive: true });
   const setc = async html => { fs.writeFileSync(E + '/_p.html', html); await pg.goto('file://' + E + '/_p.html'); await pg.evaluate(() => document.fonts.ready); await pg.waitForTimeout(150); };
   // pass 1: cut pages 1-4
-  const fixedP = plan.pages.filter(p => p.n <= 4), cuts = {};
+  const F = plan.F || 4, fixedP = plan.pages.filter(p => p.n <= F), cuts = {};
   for (const p of fixedP) { await setc(fixedPage(p)); Object.assign(cuts, await pg.evaluate(inFit, { N, tg: TG, promo: PROMO.toString() })); }
   // continuation remainders
   const rem = id => { let k = cuts[id].k; const ps = []; for (const p of N[id].paras) { const w = p.split(/\s+/).filter(Boolean); if (k >= w.length) { k -= w.length; continue; } ps.push(w.slice(k).join(' ')); k = 0; } return ps; };
@@ -372,7 +372,7 @@ async function renderCards(pg, n, outDir) {
   // pack: imprint fixed to last half; LPT on the rest
   const imp = all.at(-1); let rest0 = all.slice(0, -1); const CAPX = C - (+process.env.MG || 30);
   let best = null;
-  let NP = 4; // owner: always 8 pages; empty space gets photos, house ads and QR boxes
+  let NP = 1; // owner 2026-11-24: only as many pages as the news fills (up to 4 continuation pages)
   for (let drop = 0; !best && drop < 40; drop++) {
   if (drop && NP < 4) { NP++; drop = 0; }
   else if (drop) { const li = rest0.map(x => !x.cont).lastIndexOf(true); if (li < 0) break; console.log('DROP', rest0[li].id); rest0.splice(li, 1); }
@@ -388,8 +388,9 @@ async function renderCards(pg, n, outDir) {
   if (!best) { console.log('NOFIT'); process.exit(2); }
   const halves = best.hv;
   halves.forEach(x => x.its.sort((a, b) => (a.imp ? 2 : a.cont ? 0 : 1) - (b.imp ? 2 : b.cont ? 0 : 1)));
+  TOTALP = F + NP;
   console.log('FILL', halves.map(x => Math.round(x.h / C * 100) + '%').join(' '));
-  const jumps = {}; halves.forEach((x, i) => x.its.forEach(it => { if (it.cont) jumps[it.id] = bn(5 + (i >> 1)); }));
+  const jumps = {}; halves.forEach((x, i) => x.its.forEach(it => { if (it.cont) jumps[it.id] = bn(F + 1 + (i >> 1)); }));
   const ks = Object.fromEntries(Object.entries(cuts).map(([k, v]) => [k, v.k]));
   const map = {};
   // pass 2 pages 1-4
@@ -399,10 +400,10 @@ async function renderCards(pg, n, outDir) {
     await pg.screenshot({ path: `${outDir}/${TAG}-p${p.n}.jpg`, type: 'jpeg', quality: 90 });
     await renderCards(pg, p.n, E + '/cards');
   }
-  TOTALP = 4 + NP; console.log('PAGES', TOTALP);
-  for (let n = 5; n <= TOTALP; n++) {
+  console.log('PAGES', TOTALP);
+  for (let n = F + 1; n <= TOTALP; n++) {
     const sec = plan.pages.find(p => p.n === n).sec, top = bodyTop(n);
-    const hv = [halves[(n - 5) * 2], halves[(n - 5) * 2 + 1]];
+    const hv = [halves[(n - F - 1) * 2], halves[(n - F - 1) * 2 + 1]];
     await setc(HEAD + `<div class="page">${WM}${header(n, sec)}<div class="body" style="top:${top}px;height:${C}px">${hv.map(x => `<div class="col half" style="width:${HW}px;height:${C}px">${x.its.map((it, i) => itemHTML(it, i > 0)).join('')}</div>`).join('')}</div>${foot(n)}</div></body></html>`);
     await fullBodies();
     console.log('SLACK p' + n, await pg.evaluate(inStretch, [C, TG, PROMO.toString()]));

@@ -43,6 +43,11 @@ def owner(): return os.environ['OWNER_CHAT_ID'].strip()
 def build(day):
     E = os.path.join(WORK, day); os.makedirs(E, exist_ok=True)
     py = [sys.executable]
+    D = dt.date.fromisoformat(day); M = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর']
+    dbn = lambda x: f'{bn(x.day)} {M[x.month - 1]}'
+    again = os.environ.get('EP_UNTIL_NOW') == '1'
+    if os.environ.get('NO_TELEGRAM') != '1':
+        tg('sendMessage', chat_id=owner(), text=f'🛠 {dbn(D)}-এর ই-পেপার ({dbn(D - dt.timedelta(days=1))}-এর খবর দিয়ে) ' + ('আবার ' if again else '') + 'বানানো শুরু করলাম। তৈরি হলে চেক করার জন্য এখানে পাঠাবো।')
     subprocess.run(py + [os.path.join(HERE, 'auto_fetch.py'), E, day], check=True)
     plan = json.load(open(f'{E}/plan.json'))
     subprocess.run(['node', os.path.join(HERE, 'build.js'), E], check=True, env={**os.environ, 'MG': '80'})
@@ -55,6 +60,11 @@ def build(day):
     cap = open(f'{E}/caption.txt').read()
     kb = {'inline_keyboard': [[{'text': '✅ সবকিছু ঠিক আছে, পাবলিশ করো', 'callback_data': f'ep:pub:{day}'}],
                               [{'text': '✏️ কিছু ভুল আছে, সংশোধনের জন্য Claude-এ পাঠাচ্ছি', 'callback_data': f'ep:hold:{day}'}]]}
+    nn = plan.get('nnews', 0); short = max(1, 22 - nn)
+    if len(pages) < 8:  # owner: few news -> fewer pages; tell how many more news are needed for 8 pages
+        kb['inline_keyboard'].insert(1, [{'text': '🔄 নিউজ আপলোড করেছি, আবার বানাও', 'callback_data': f'ep:re:{day}'}])
+        cap = (f'⚠️ আজ {bn(nn)}টি নিউজ ছিল, তা দিয়ে {bn(len(pages))} পাতা হয়েছে। ৮ পাতা করতে আরও প্রায় {bn(short)}টি নিউজ আপলোড করুন, '
+               'তারপর "আবার বানাও" বাটনে চাপ দিন।\n\n') + cap
     if os.environ.get('NO_TELEGRAM') != '1':
         tg('sendDocument', files={'document': pdf}, chat_id=owner(), caption=cap[:1024], reply_markup=kb)
     print('built', day, len(pages), 'pages')

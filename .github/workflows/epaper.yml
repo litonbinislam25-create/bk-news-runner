@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build | publish | build_publish | recards"
+        description: "build | rebuild | publish | build_publish | recards"
         default: "build"
       day:
         description: "edition date YYYY-MM-DD (empty = today in Bangladesh)"
@@ -25,6 +25,7 @@ jobs:
       EPAPER_USER: ${{ secrets.EPAPER_USER }}
       EPAPER_APP_PASSWORD: ${{ secrets.EPAPER_APP_PASSWORD }}
       ACT: ${{ github.event.inputs.action || 'build' }}
+      EP_UNTIL_NOW: ${{ github.event.inputs.action == 'rebuild' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - name: Edition date

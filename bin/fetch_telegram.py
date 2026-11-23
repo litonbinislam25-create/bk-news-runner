@@ -40,14 +40,14 @@ def epaper_button(cq, st):
         tg("answerCallbackQuery", callback_query_id=cq["id"]); return
     _, act, day = data.split(":", 2)
     msg = cq.get("message") or {}
-    if act == "pub":
+    if act in ("pub", "re"):
         import urllib.request as ur
         r = ur.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/workflows/epaper.yml/dispatches",
-                       data=json.dumps({"ref": "main", "inputs": {"action": "publish", "day": day}}).encode(), method="POST",
+                       data=json.dumps({"ref": "main", "inputs": {"action": "publish" if act == "pub" else "rebuild", "day": day}}).encode(), method="POST",
                        headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"})
         ur.urlopen(r, timeout=30).read()
-        tg("answerCallbackQuery", callback_query_id=cq["id"], text="প্রকাশ শুরু হয়েছে, কয়েক মিনিট লাগবে।")
-        note = "⏳ সাইটে তোলা হচ্ছে… শেষ হলে জানানো হবে।"
+        tg("answerCallbackQuery", callback_query_id=cq["id"], text="শুরু হয়েছে, কয়েক মিনিট লাগবে।")
+        note = "⏳ সাইটে তোলা হচ্ছে… শেষ হলে জানানো হবে।" if act == "pub" else "🔄 নতুন নিউজসহ আবার বানানো হচ্ছে… তৈরি হলে নতুন PDF পাঠানো হবে।"
     else:
         tg("answerCallbackQuery", callback_query_id=cq["id"], text="ঠিক আছে, প্রকাশ আটকে রাখা হলো।")
         note = "⏸ এই সংখ্যা প্রকাশ হয়নি। কী ভুল আছে Claude-কে লিখে জানান।"

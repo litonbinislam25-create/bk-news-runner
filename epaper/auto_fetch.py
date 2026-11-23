@@ -27,7 +27,8 @@ def bangla(d):  # revised Bangladesh calendar
         if n < l: return f'{bn(n + 1)} {BM[i]} {bn(y - 593)}'
         n -= l
 # ---- fetch posts
-a = dt.datetime.combine(D - dt.timedelta(days=1), dt.time(0, 0), DH); b = dt.datetime.combine(D, dt.time(0, 0), DH)  # previous calendar day 00:00-23:59 only (owner rule)
+a = dt.datetime.combine(D - dt.timedelta(days=1), dt.time(0, 0), DH); b = dt.datetime.combine(D, dt.time(0, 0), DH)
+if os.environ.get('EP_UNTIL_NOW') == '1': b = max(b, dt.datetime.now(DH).replace(microsecond=0))  # rebuild: also news the owner added after midnight  # previous calendar day 00:00-23:59 only (owner rule)
 q = urllib.parse.urlencode({'after': a.strftime('%Y-%m-%dT%H:%M:%S'), 'before': b.strftime('%Y-%m-%dT%H:%M:%S'), 'per_page': 60, '_embed': 'wp:featuredmedia,wp:term',
      '_fields': 'id,date,title,content,categories,_links,_embedded'})
 P = get(f'{SITE}/wp-json/wp/v2/posts?{q}')
@@ -132,11 +133,15 @@ for i, (ms, dflt) in enumerate([(p2, 'হবিগঞ্জ'), (p3, 'জাত�
         pages.append({'n': i + 2, 'sec': secname(ms, dflt), 'left': ids[:2], 'right': ids[2:]}); continue
     if len(ids) < 3: ids = ids[:1] + [None] + ids[1:]  # keep a story under the ad
     pages.append({'n': i + 2, 'sec': secname(ms, dflt), 'left': [x for x in ids[:2] if x], 'right': [{'ad': AD[i]}] + ids[2:]})
-for n in range(5, 9): pages.append({'n': n, 'sec': 'বাকি অংশ'})
+# owner 2026-11-24: only as many pages as the news fills; pages 2-4 without stories are left out
+pages = [pages[0]] + [pg for pg in pages[1:] if pg['left'] or any(isinstance(x, str) for x in pg['right'])]
+for i, pg in enumerate(pages): pg['n'] = i + 1
+F = len(pages)
+for n in range(F + 1, F + 5): pages.append({'n': n, 'sec': 'বাকি অংশ'})
 old = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'e21/plan.json')))
 dd = D.strftime('%d-%m-%Y')
 plan = {'tag': f'bk-{dd}', 'date': D.strftime('%d.%m.%Y'), 'dateBn': f'{bn(D.day)} {MON[D.month - 1]} {bn(D.year)}, {WD[D.weekday()]}', 'bangla': bangla(D).rsplit(' ', 0)[0],
-        'pages': pages, 'full': full, 'imprint': old['imprint'], 'dateBn2': f'{WD[D.weekday()]}, {bn(D.day)} {MON[D.month - 1]} {bn(D.year)}'}
+        'pages': pages, 'F': F, 'nnews': len(meta), 'full': full, 'imprint': old['imprint'], 'dateBn2': f'{WD[D.weekday()]}, {bn(D.day)} {MON[D.month - 1]} {bn(D.year)}'}
 json.dump(plan, open(f'{E}/plan.json', 'w'), ensure_ascii=False, indent=0)
 print('posts', len(P), 'usable', len(meta), 'full', len(full), plan['dateBn2'], plan['bangla'])
 for pg in pages: print(pg)
