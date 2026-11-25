@@ -1,6 +1,6 @@
 # daily.py build  [YYYY-MM-DD]  -> builds the edition in work/<date>/, makes PDF, sends it to the owner on Telegram with 2 buttons
 # daily.py publish YYYY-MM-DD   -> uploads work/<date>/up/* to the e-paper site, creates one post per page, tells the owner
-# Code only (no AI). Secrets come from env: TELEGRAM_BOT_TOKEN, OWNER_CHAT_ID, EPAPER_USER, EPAPER_APP_PASSWORD.
+# Code only, except ext_fill.py (outside news rewritten by a small Claude call). Secrets come from env: TELEGRAM_BOT_TOKEN, OWNER_CHAT_ID, EPAPER_USER, EPAPER_APP_PASSWORD.
 import sys, os, json, glob, base64, subprocess, datetime as dt, urllib.request, urllib.parse, xmlrpc.client, time, re
 HERE = os.path.dirname(os.path.abspath(__file__)); WORK = os.path.join(HERE, 'work')
 EP = 'https://banglarkhabor24.com/epaper'
@@ -61,6 +61,7 @@ def build(day):
     kb = {'inline_keyboard': [[{'text': '✅ সবকিছু ঠিক আছে, পাবলিশ করো', 'callback_data': f'ep:pub:{day}'}],
                               [{'text': '✏️ কিছু ভুল আছে, সংশোধনের জন্য Claude-এ পাঠাচ্ছি', 'callback_data': f'ep:hold:{day}'}]]}
     nn = plan.get('nnews', 0); short = max(1, 22 - nn)
+    if plan.get('next'): cap = f"ℹ️ আমাদের {bn(nn)}টি নিউজের সঙ্গে বাইরের সাইট থেকে {bn(plan['next'])}টি নিউজ নিজের ভাষায় লিখে (সূত্রসহ) যোগ করেছি।\n\n" + cap
     if len(pages) < 8:  # owner: few news -> fewer pages; tell how many more news are needed for 8 pages
         kb['inline_keyboard'].insert(1, [{'text': '🔄 নিউজ আপলোড করেছি, আবার বানাও', 'callback_data': f'ep:re:{day}'}])
         cap = (f'⚠️ আজ {bn(nn)}টি নিউজ ছিল, তা দিয়ে {bn(len(pages))} পাতা হয়েছে। ৮ পাতা করতে আরও প্রায় {bn(short)}টি নিউজ আপলোড করুন, '

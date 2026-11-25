@@ -97,12 +97,20 @@ for p in P:
     words = sum(len(x.split()) for x in mm)
     meta.append({'id': sid, 'local': local, 'mad': 'মাধবপুর' in terms or by.startswith('মাধবপুর'), 'lead': 'লিড নিউজ' in terms,
                  'img': has, 'words': words, 'nat': any(x in terms for x in ('জাতীয়', 'রাজনীতি', 'অর্থনীতি', 'আইন আদালত')), 'date': p['date'], 'cats': terms, 'old': sid in oldids})
+# owner 2026-11-25: news still missing for 8 pages (~22) come from outside sites, rewritten in our words with source named
+own = len([m for m in meta if m['words'] >= 40 and not m['old']])
+if os.environ.get('EP_EXT', '1') == '1' and own < 22:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import ext_fill
+    cfg = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config.json')))
+    try: xN, xm = ext_fill.fill(22 - own, a, b, E, fit, cfg.get('ai_model') or 'claude-haiku-5-5')
+    except Exception as ex: print('ext fill failed', ex); xN, xm = {}, []
+    N.update(xN); meta += xm
 json.dump(N, open(f'{E}/news.json', 'w'), ensure_ascii=False, indent=0)
 # ---- plan
 meta = [m for m in meta if m['words'] >= 40]
 olds = sorted([m for m in meta if m['old'] and m['img']], key=lambda m: (m['local'], m['date']), reverse=True)
 meta = [m for m in meta if not m['old']]
-score = lambda m: (m['img'], m['mad'] * 3 + m['local'] * 2 + m['lead'] + min(m['words'], 600) / 600)
+score = lambda m: (not m.get('ext'), m['img'], m['mad'] * 3 + m['local'] * 2 + m['lead'] + min(m['words'], 600) / 600)
 meta.sort(key=score, reverse=True)
 used = set()
 def take(pred, n, need_img=False):
@@ -122,6 +130,7 @@ full = [m['id'] for m in meta if m['id'] not in used and m['img']] + [m['id'] fo
 def secname(ms, dflt):
     ks = [N[m['id']]['kick'] for m in ms]
     if all(m['local'] for m in ms) and ms: return 'হবিগঞ্জ'
+    if ms and len(set(ks)) == 1 and ks[0] in ('জাতীয়', 'আন্তর্জাতিক', 'সারাদেশ', 'খেলা', 'বিনোদন'): return ks[0]
     return dflt
 AD = ['ad_epaper.jpg', None, 'ad_sunni.jpg']  # page 3 has no ad (owner 2026-11-23); ad_jamia.jpg not used
 pages = [{'n': 1, 'sec': 'প্রথম পাতা', 'lead': lead[0]['id'], 'right': [m['id'] for m in right]}]
@@ -141,7 +150,7 @@ for n in range(F + 1, F + 5): pages.append({'n': n, 'sec': 'বাকি অং�
 old = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'e21/plan.json')))
 dd = D.strftime('%d-%m-%Y')
 plan = {'tag': f'bk-{dd}', 'date': D.strftime('%d.%m.%Y'), 'dateBn': f'{bn(D.day)} {MON[D.month - 1]} {bn(D.year)}, {WD[D.weekday()]}', 'bangla': bangla(D).rsplit(' ', 0)[0],
-        'pages': pages, 'F': F, 'nnews': len(meta), 'full': full, 'imprint': old['imprint'], 'dateBn2': f'{WD[D.weekday()]}, {bn(D.day)} {MON[D.month - 1]} {bn(D.year)}'}
+        'pages': pages, 'F': F, 'nnews': len([m for m in meta if not m.get('ext')]), 'next': len([m for m in meta if m.get('ext')]), 'full': full, 'imprint': old['imprint'], 'dateBn2': f'{WD[D.weekday()]}, {bn(D.day)} {MON[D.month - 1]} {bn(D.year)}'}
 json.dump(plan, open(f'{E}/plan.json', 'w'), ensure_ascii=False, indent=0)
 print('posts', len(P), 'usable', len(meta), 'full', len(full), plan['dateBn2'], plan['bangla'])
 for pg in pages: print(pg)

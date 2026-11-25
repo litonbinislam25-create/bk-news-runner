@@ -1,6 +1,6 @@
 name: epaper
 # Every night 00:05 Bangladesh time (started by the news workflow, bin/fetch_telegram.py epaper_timer, because GitHub's cron runs late): build the e-paper from the previous day's news (00:00-23:59), send PDF + 2 buttons to the owner on Telegram.
-# The "publish" button (handled by the news workflow) starts this workflow again with action=publish. Code only, no AI.
+# The "publish" button (handled by the news workflow) starts this workflow again with action=publish. Code only; outside filler news (epaper/ext_fill.py) use one small Claude call each.
 on:
   workflow_dispatch:
     inputs:
@@ -24,6 +24,7 @@ jobs:
       OWNER_CHAT_ID: ${{ secrets.OWNER_CHAT_ID }}
       EPAPER_USER: ${{ secrets.EPAPER_USER }}
       EPAPER_APP_PASSWORD: ${{ secrets.EPAPER_APP_PASSWORD }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ACT: ${{ github.event.inputs.action || 'build' }}
       EP_UNTIL_NOW: ${{ github.event.inputs.action == 'rebuild' && '1' || '0' }}
     steps:
@@ -46,7 +47,7 @@ jobs:
       - name: Tools
         if: env.ACT != 'publish' && env.ACT != 'recards'
         run: |
-          pip install -q pillow
+          pip install -q pillow anthropic
           npm i -g playwright@1.49.1 >/dev/null 2>&1
           npx -y playwright@1.49.1 install --with-deps chromium >/dev/null
           echo "NODE_PATH=$(npm root -g)" >> $GITHUB_ENV
