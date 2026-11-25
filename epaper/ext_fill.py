@@ -132,7 +132,7 @@ if __name__ == '__main__':
     b = dt.datetime.combine(D, dt.time(0, 0), DH); a = b - dt.timedelta(days=1)
     b = min(b, dt.datetime.now(DH))
     P = picks(a, b, int(sys.argv[3]) if len(sys.argv) > 3 else 16)
-    for s in P: s['text'] = s['text'][:2500]
+    for s in P: s['text'] = s['text'][:1300]
     o = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'state', 'epaper_ext'); os.makedirs(o, exist_ok=True)
     json.dump(P, open(f'{o}/{D}.pool.json', 'w'), ensure_ascii=False, indent=0)
     print(len(P), 'stories ->', f'{o}/{D}.pool.json')
