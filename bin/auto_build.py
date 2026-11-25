@@ -145,44 +145,99 @@ def pick_categories(title, body, area):
     return res[:3], found[0] if found else ""
 
 
+def _secs(hms):
+    h, m, x = (int(v) for v in hms.split(":"))
+    return h * 3600 + m * 60 + x
+
+
 def split_stories(item):
-    """Split one batch into stories and attach each photo (see RUN.md)."""
-    stories, loose_before, last = [], [], None
+    """Split one batch into stories and attach each photo.
+
+    Photos sent on their own (no text) are matched to a story like this (owner 2026-11-25, after the
+    Lakhai / Andiura mix-up where every photo slid one story down):
+      1. a photo from the same album as a story's message goes to that story;
+      2. link news never takes a loose photo (it uses the source article's photo);
+      3. the reporter's own habit in this batch decides: photos before the first story = "photo first,
+         then text" (each photo goes to the NEXT story); photos after the last story = "text first,
+         then photo" (each goes to the PREVIOUS story);
+      4. if that is not clear, the photo goes to the story it was sent much closer in time to;
+      5. still not clear -> the stories next to it are marked photo_unsure and are NOT published
+         automatically (a wrong photo is worse than a short wait).
+    """
+    seq, stories, last = [], [], None
+    t0 = None
     for m in item["messages"]:
         t = (m.get("text") or "").strip()
         if t.startswith(("📌", "/")):
             continue
+        sec = _secs(m.get("time_utc") or "00:00:00")
+        if t0 is not None and sec < t0 - 43200:
+            sec += 86400  # batch crossed midnight UTC
+        t0 = sec if t0 is None else max(t0, sec)
         lines = clean_lines(t)
         body_len = sum(len(x) for x in lines)
         starts = body_len >= 250 or (lines and parse_dateline(lines) is not None and body_len >= 120)
         if starts:
-            last = {"lines": lines, "photos": [], "links": list(m.get("links") or []), "msg": m["message_id"]}
-            if m.get("photo"):
-                last["photos"].append(m["photo"])
-            if loose_before:  # photos sent between two stories
-                prev = stories[-1] if stories else None
-                if prev and not prev["photos"]:
-                    prev["photos"] += loose_before
-                else:
-                    last["photos"] = loose_before + last["photos"]
-                loose_before = []
-            stories.append(last)
+            last = {"lines": lines, "photos": [m["photo"]] if m.get("photo") else [], "links": list(m.get("links") or []),
+                    "msg": m["message_id"], "t": sec, "album": m.get("album")}
+            stories.append(last); seq.append(("S", last))
         elif m.get("links") and body_len < 250:
-            stories.append({"lines": lines, "photos": [m["photo"]] if m.get("photo") else [], "links": m["links"],
-                            "msg": m["message_id"], "link_only": True})
-            last = stories[-1]
+            last = {"lines": lines, "photos": [m["photo"]] if m.get("photo") else [], "links": m["links"],
+                    "msg": m["message_id"], "link_only": True, "t": sec, "album": m.get("album")}
+            stories.append(last); seq.append(("S", last))
         elif m.get("photo"):
-            loose_before.append(m["photo"])
+            if seq and seq[-1][0] == "P" and seq[-1][1]["albums"] == {m.get("album")}:
+                seq[-1][1]["photos"].append(m["photo"]); seq[-1][1]["albums"].add(m.get("album"))
+            else:
+                seq.append(("P", {"photos": [m["photo"]], "t": sec, "albums": {m.get("album")}}))
         elif last and body_len >= 60:
             last["lines"] += lines  # continuation of the same report
         # else: chit-chat -> silently skipped
-    if loose_before:
-        if stories and not stories[-1]["photos"]:
-            stories[-1]["photos"] += loose_before
-        elif not stories:
-            pass  # photos only, nothing to publish
+
+    text_idx = [i for i, (k, x) in enumerate(seq) if k == "S" and not x.get("link_only")]
+    runs = [i for i, (k, x) in enumerate(seq) if k == "P"]
+    if not text_idx or not runs:
+        return stories
+    # 1. albums: photos that belong to a story's own album
+    for i in list(runs):
+        run = seq[i][1]
+        owner = next((x for k, x in seq if k == "S" and x.get("album") and x["album"] in run["albums"]), None)
+        if owner:
+            owner["photos"] += run["photos"]; runs.remove(i)
+    if len(text_idx) == 1:  # only one story with text: every loose photo is its photo
+        for i in runs:
+            seq[text_idx[0]][1]["photos"] += seq[i][1]["photos"]
+        return stories
+    fwd = any(i < text_idx[0] for i in runs)
+    back = any(i > text_idx[-1] for i in runs)
+    for i in runs:
+        run = seq[i][1]
+        prev = next((seq[j][1] for j in reversed(text_idx) if j < i), None)
+        nxt = next((seq[j][1] for j in text_idx if j > i), None)
+        target = None
+        if fwd and not back:
+            target = nxt
+        elif back and not fwd:
+            target = prev
+        if target is None:
+            gp = run["t"] - prev["t"] if prev else None
+            gn = nxt["t"] - run["t"] if nxt else None
+            if gp is not None and gn is not None:
+                if gp * 2 <= gn and gp <= 600:
+                    target = prev
+                elif gn * 2 <= gp and gn <= 600:
+                    target = nxt
+            elif prev is None and nxt is not None:
+                target = nxt
+            elif nxt is None and prev is not None:
+                target = prev
+        if target is not None:
+            target["photos"] += run["photos"]
         else:
-            stories[-1]["photos"] += loose_before
+            for x in (prev, nxt):  # both get the photo as a candidate; a person/Claude picks before publishing
+                if x is not None:
+                    x["photo_unsure"] = True
+                    x["photos"] += run["photos"]
     return stories
 
 
@@ -241,6 +296,8 @@ def build_article(item, s):
         "channel_ok": not any(has(full, w) for w in NOT_CHANNEL), "reply_to_message_id": s["msg"],
         "acf_reporter": "মাধবপুর প্রতিনিধি" if madhabpur else None, "sources": [],
     }
+    if s.get("photo_unsure"):
+        return {"decision": "queue", "queue_reason": "ছবি কোন খবরের তা নিশ্চিত নয়", "story": s, "draft_art": art}
     if sensitive and not elect and config().get("sensitive_auto", True):
         # OWNER 2026-11-22: reporter's sensitive news (death, murder...) goes up at once, no waiting for a check.
         # Whole photo blurred, no second photo, never on the Telegram channel.
