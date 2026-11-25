@@ -121,7 +121,9 @@ def take(pred, n, need_img=False):
         r.append(m); used.add(m['id'])
     return r
 ref = lambda m: m['id'] + ('' if m['img'] else '!')
-lead = take(lambda m: m['img'], 1, True)
+LF = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'state', 'epaper_lead', D.isoformat() + '.txt')  # owner's chosen lead (post id)
+want = open(LF).read().strip() if os.path.exists(LF) else ''
+lead = take(lambda m: m['id'] == want and m['img'], 1, True) or take(lambda m: m['img'], 1, True)
 right = take(lambda m: True, 3, True)
 p2 = take(lambda m: m['local'], 3); p2 += take(lambda m: True, 3 - len(p2))
 p3 = take(lambda m: m['nat'], 3); p3 += take(lambda m: True, 3 - len(p3))
