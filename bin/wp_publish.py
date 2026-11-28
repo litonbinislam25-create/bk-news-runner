@@ -265,6 +265,14 @@ def publish_one(d, item, art, cfg):
         log(f"duplicate {item['id']}: {art.get('title')} = {dup[0]}")
         return {"status": "duplicate", "title": art.get("title", ""), "dup_id": dup[0], "dup_title": dup[1],
                 "link": f"{cfg['site_url'].rstrip('/')}/news/{dup[0]}"}
+    if not art.get("featured_photo") and not art.get("allow_no_photo"):
+        # OWNER RULE 2026-11-28: every published story MUST have a photo -> don't publish, ask the sender
+        log(f"no photo {item['id']}: {art.get('title')}")
+        if item.get("chat_id"):
+            ask_reporter(item["chat_id"], art.get("reply_to_message_id") or item.get("first_message_id"),
+                         "আপনার পাঠানো নিউজটির সঙ্গে কোনো ছবি পাওয়া যায়নি, তাই প্রকাশ করা যায়নি।",
+                         "অনুগ্রহ করে ছবিসহ নিউজটি আবার পাঠান। ধন্যবাদ।")
+        return {"status": "skipped", "no_photo": True, "title": art.get("title", "")}
 
     N = lambda s: unicodedata.normalize("NFD", s or "").strip()  # য় can be written two ways
     site_cats = {N(c["name"]): c["id"] for c in load_json(os.path.join(STATE, "site_categories.json"), [])}
