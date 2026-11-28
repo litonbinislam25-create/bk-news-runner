@@ -88,6 +88,17 @@ def to_16x9(path, w=1280, h=720, focus_y=None):
     from PIL import Image, ImageFilter, ImageOps
     im = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
     r = im.width / im.height
+    if abs(r - 16 / 9) > 0.08:  # OWNER RULE 2026-11-28: never crop a head/face. Photo not 16:9 -> whole photo
+        # in the centre, sides filled with a blurred, enlarged copy of the same photo (owner's sample)
+        bg = ImageOps.fit(im, (w, h), Image.LANCZOS).filter(ImageFilter.GaussianBlur(30))
+        bg = Image.blend(bg, Image.new("RGB", (w, h), (0, 0, 0)), 0.12)
+        fg = im.copy(); fg.thumbnail((w, h), Image.LANCZOS)
+        if fg.width < w and fg.height < h:  # small photo: scale up to fill the height/width
+            k = min(w / fg.width, h / fg.height); fg = im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)
+        bg.paste(fg, ((w - fg.width) // 2, (h - fg.height) // 2))
+        dst = os.path.splitext(path)[0] + "_16x9.jpg"
+        bg.save(dst, "JPEG", quality=88, optimize=True, progressive=True)
+        return dst
     if r <= 2.3:  # owner 2026-11-20: portrait photos are cover-cropped too (no small photo on blur)
         faces = [] if focus_y is not None else find_faces(im)
         if faces:
