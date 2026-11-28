@@ -83,7 +83,10 @@ def parse_dateline(lines):
         else:
             if not re.search(r"\(", pre) and len(pre.split()) <= 3 and pre not in ("নিজস্ব", "স্টাফ"):
                 name, area = "", pre
-        return i, name, area, m.group(2), m.group(3).strip()
+        rest = m.group(3).strip()
+        if rest and not name and len(rest) <= 30 and len(rest.split()) <= 4 and not re.search(r"[।,:]", rest):
+            name, rest = rest, ""  # "মালদ্বীপ প্রতিনিধি: আবু জাহের" -> the name comes after the colon
+        return i, name, area, m.group(2), rest
     # "আফতাবুল ইসলাম মেহেরাব হাইমচর।" = name + place on its own short line
     for i, ln in enumerate(lines[1:3], 1):
         fa = first_area(ln)
