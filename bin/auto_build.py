@@ -65,6 +65,11 @@ def sentences(s):
 
 def parse_dateline(lines):
     """Find 'X প্রতিনিধি:' in the first 3 lines. Returns (index, name, area_str, rest_of_line)."""
+    TITLES = r"(স্টাফ\s*রিপোর্টার|স্টাফ\s*করেসপন্ডেন্ট|নিজস্ব\s*প্রতিবেদক|নিজস্ব\s*সংবাদদাতা|বিশেষ\s*প্রতিনিধি|জ্যেষ্ঠ\s*প্রতিবেদক)"
+    for i, ln in enumerate(lines[1:3], 1):  # OWNER RULE 2026-11-28: "<name> স্টাফ রিপোর্টার" -> keep name + title as sent
+        m = re.match(r"^(.{0,60}?)[\s,\-–—]*" + TITLES + r"\s*[:：ঃ।.]?\s*(.*)$", ln)
+        if m and len(m.group(1)) <= 60 and (len(m.group(3)) > 40 or not m.group(3)):
+            return i, m.group(1).strip(" ,-–—"), "", re.sub(r"\s+", " ", m.group(2)), m.group(3).strip()
     for i, ln in enumerate(lines[:3]):
         m = re.match(r"^(.{0,80}?)(প্রতিনিধি|প্রতিবেদক|সংবাদদাতা)\s*[:：ঃ]\s*(.*)$", ln) \
             or re.match(r"^(.{0,80}?)(প্রতিনিধি|প্রতিবেদক|সংবাদদাতা)\s*[।.]?()$", ln)
@@ -266,12 +271,15 @@ def build_article(item, s):
         return {"decision": "queue", "queue_reason": "লেখা খুব ছোট", "story": s}
     plain = " ".join(paras)
     cats, place = pick_categories(title, plain, area)
-    if not area:
+    staff = bool(dl) and not area and word not in ("প্রতিনিধি", "প্রতিবেদক", "সংবাদদাতা")
+    if not area and not staff:
         area = f"{place} (হবিগঞ্জ)" if place in map(N, HABIGANJ) else (place or "মাধবপুর (হবিগঞ্জ)")
     if area in HABIGANJ and "(" not in area:
         area = f"{area} (হবিগঞ্জ)"
-    dateline = f"{area} {word}:"
-    if word == "প্রতিনিধি" and "প্রতিনিধি" not in dateline:
+    dateline = f"{area} {word}:".strip()
+    if staff:  # name + title exactly as the reporter wrote it
+        dateline = f"{name}, {word}:" if name else f"{word}:"
+    elif word == "প্রতিনিধি" and "প্রতিনিধি" not in dateline:
         dateline = f"{area} প্রতিনিধি:"
     full = N(title + " " + plain)
     sensitive = [w for w in SENSITIVE if has(full, w)]
