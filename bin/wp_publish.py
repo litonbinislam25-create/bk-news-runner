@@ -81,58 +81,58 @@ def _place(total, size, lo, hi, want):
     return int(max(0, min(total - size, start)))
 
 
-def to_16x9(path, w=1280, h=720, focus_y=None):
-    """OWNER RULE: every image on the site is 16:9. Landscape-ish photos are cropped, portrait photos are
-    cover-cropped; only ultra-wide panoramas go on blur. Owner 2026-11-22: people must be clearly visible, so the
-    crop window follows the detected faces (with headroom and the upper body below); without faces: old top-biased rule."""
+def _blur_fill(im, w, h):
+    """Whole photo in the centre, sides filled with a blurred, enlarged copy of itself (owner's sample 2026-11-28)."""
     from PIL import Image, ImageFilter, ImageOps
+    bg = ImageOps.fit(im, (w, h), Image.LANCZOS).filter(ImageFilter.GaussianBlur(30))
+    bg = Image.blend(bg, Image.new("RGB", (w, h), (0, 0, 0)), 0.12)
+    k = min(w / im.width, h / im.height)
+    fg = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+    bg.paste(fg, ((w - fg.width) // 2, (h - fg.height) // 2))
+    return bg
+
+
+def to_16x9(path, w=1280, h=720, focus_y=None):
+    """OWNER RULE (2026-11-28): every image is 16:9, decided per photo. If a 16:9 crop keeps every head/face fully
+    inside with some margin -> crop normally (faces near the top, chest below). If a crop would cut any head/face
+    (tall portraits, tight groups, faces not found in a tall photo) -> whole photo centred on a blurred copy."""
+    from PIL import Image, ImageOps
     im = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
     r = im.width / im.height
-    if abs(r - 16 / 9) > 0.08:  # OWNER RULE 2026-11-28: never crop a head/face. Photo not 16:9 -> whole photo
-        # in the centre, sides filled with a blurred, enlarged copy of the same photo (owner's sample)
-        bg = ImageOps.fit(im, (w, h), Image.LANCZOS).filter(ImageFilter.GaussianBlur(30))
-        bg = Image.blend(bg, Image.new("RGB", (w, h), (0, 0, 0)), 0.12)
-        fg = im.copy(); fg.thumbnail((w, h), Image.LANCZOS)
-        if fg.width < w and fg.height < h:  # small photo: scale up to fill the height/width
-            k = min(w / fg.width, h / fg.height); fg = im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)
-        bg.paste(fg, ((w - fg.width) // 2, (h - fg.height) // 2))
-        dst = os.path.splitext(path)[0] + "_16x9.jpg"
-        bg.save(dst, "JPEG", quality=88, optimize=True, progressive=True)
-        return dst
-    if r <= 2.3:  # owner 2026-11-20: portrait photos are cover-cropped too (no small photo on blur)
+    if abs(r - 16 / 9) <= 0.03:
+        out = im.resize((w, h), Image.LANCZOS)
+    elif r > 2.3:
+        out = _blur_fill(im, w, h)
+    else:
         faces = [] if focus_y is not None else find_faces(im)
         if faces:
             fx0 = min(b[0] for b in faces); fx1 = max(b[2] for b in faces)
             fy0 = min(b[1] for b in faces); fy1 = max(b[3] for b in faces)
             fh = max(b[3] - b[1] for b in faces)
+            # whole heads with margin: hair above the box, chin + a bit below, some room at the sides
+            need = (fx0 - fh * 0.3, fy0 - fh * 0.7, fx1 + fh * 0.3, fy1 + fh * 0.35)
         if r > 16 / 9:  # too wide: crop sides
             nw = round(im.height * 16 / 9)
-            if faces:
-                x = _place(im.width, nw, fx0 - fh * 0.3, fx1 + fh * 0.3, (fx0 + fx1) / 2)
-            else:
-                x = (im.width - nw) // 2
-            im = im.crop((x, 0, x + nw, im.height))
-        else:  # too tall: crop, keep more of the top
+            x = _place(im.width, nw, fx0 - fh * 0.3, fx1 + fh * 0.3, (fx0 + fx1) / 2) if faces else (im.width - nw) // 2
+            box = (x, 0, x + nw, im.height)
+        else:  # too tall: faces in the upper part, people down to the chest
             nh = round(im.width * 9 / 16)
             if faces:
-                # owner's own sample (2026-11-22): only a little space above the highest head (hair ~0.5 face
-                # height above the detected box), faces in the upper third, people shown down to the chest
-                top = fy0 - fh * 0.7
-                if fy1 + fh * 0.3 - top <= nh:
-                    y = int(max(0, min(im.height - nh, top)))
-                else:  # faces spread too far apart vertically: never cut the top heads off
-                    y = int(max(0, min(im.height - nh, top)))
+                y = int(max(0, min(im.height - nh, fy0 - fh * 0.7)))
             else:
-                fy = focus_y if focus_y is not None else (0.45 if r >= 1 else 0.38)  # centre of the crop (0=top, 1=bottom)
+                fy = focus_y if focus_y is not None else (0.45 if r >= 1 else 0.38)
                 y = max(0, min(im.height - nh, int(fy * im.height - nh / 2)))
-            im = im.crop((0, y, im.width, y + nh))
-        out = im.resize((w, h), Image.LANCZOS)
-    else:
-        bg = ImageOps.fit(im, (w, h), Image.LANCZOS).filter(ImageFilter.GaussianBlur(28))
-        bg = Image.blend(bg, Image.new("RGB", (w, h), (0, 0, 0)), 0.25)
-        fg = im.copy(); fg.thumbnail((w, h), Image.LANCZOS)
-        bg.paste(fg, ((w - fg.width) // 2, (h - fg.height) // 2))
-        out = bg
+            box = (0, y, im.width, y + nh)
+        if faces:
+            ok = (need[0] >= box[0] - 1 or need[0] < 0 and box[0] == 0) and \
+                 (need[2] <= box[2] + 1 or need[2] > im.width and box[2] == im.width) and \
+                 (need[1] >= box[1] - 1 or need[1] < 0 and box[1] == 0) and \
+                 (need[3] <= box[3] + 1 or need[3] > im.height and box[3] == im.height)
+            if r < 1 and fh > im.height * 0.15:  # close-up portrait: a crop leaves only a face -> show it whole
+                ok = False
+        else:  # no face found: a landscape crop is safe; a tall photo may hide heads -> don't risk it
+            ok = focus_y is not None or r >= 1.2
+        out = im.crop(box).resize((w, h), Image.LANCZOS) if ok else _blur_fill(im, w, h)
     dst = os.path.splitext(path)[0] + "_16x9.jpg"
     out.save(dst, "JPEG", quality=88, optimize=True, progressive=True)
     return dst
