@@ -63,7 +63,12 @@ def find_faces(im):
     if not boxes:
         return []
     big = max((b[2] - b[0]) for b in boxes)  # drop tiny far-away faces / false hits
-    return [b for b in boxes if (b[2] - b[0]) >= big * 0.4]
+    boxes = [b for b in boxes if (b[2] - b[0]) >= big * 0.4]
+    if len(boxes) >= 3:  # 2026-11-28: a lone false hit far from the group (a shoe, a hand) cut off every head
+        hs = sorted(b[3] - b[1] for b in boxes); mh = hs[len(hs) // 2]
+        cs = sorted((b[1] + b[3]) / 2 for b in boxes); mc = cs[len(cs) // 2]
+        boxes = [b for b in boxes if abs((b[1] + b[3]) / 2 - mc) <= 3 * mh]
+    return boxes
 
 
 def _place(total, size, lo, hi, want):
@@ -104,8 +109,8 @@ def to_16x9(path, w=1280, h=720, focus_y=None):
                 top = fy0 - fh * 0.7
                 if fy1 + fh * 0.3 - top <= nh:
                     y = int(max(0, min(im.height - nh, top)))
-                else:  # faces spread too far apart vertically: keep them all, centred
-                    y = _place(im.height, nh, fy0 - fh * 0.6, fy1 + fh * 0.3, (fy0 + fy1) / 2)
+                else:  # faces spread too far apart vertically: never cut the top heads off
+                    y = int(max(0, min(im.height - nh, top)))
             else:
                 fy = focus_y if focus_y is not None else (0.45 if r >= 1 else 0.38)  # centre of the crop (0=top, 1=bottom)
                 y = max(0, min(im.height - nh, int(fy * im.height - nh / 2)))
