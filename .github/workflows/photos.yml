@@ -21,7 +21,7 @@ jobs:
       - run: |
           mkdir -p out
           for id in ${{ github.event.inputs.post_ids }}; do
-            for f in $(grep -l -- "$id" done/*/articles.json done/*/result.json 2>/dev/null); do
+            for f in $(grep -l -- "$id" done/*/*.json 2>/dev/null); do
               d=$(dirname "$f"); mkdir -p "out/$id"; cp -r "$d" "out/$id/"; done
           done
           grep -h -- "${{ github.event.inputs.post_ids }}" logs/run.log | tail -5 || true
