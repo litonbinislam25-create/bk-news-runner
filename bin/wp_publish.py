@@ -357,11 +357,40 @@ def publish_one(d, item, art, cfg):
 
 QUEUE_MARK = "<!--bkq "
 
+# OWNER RULE 2026-11-28: when a story can't be opened/used, tell the reporter who sent it (reply in the group).
+BLOCKED_LINK_DOMAINS = ("jugantor.com", "kalbela.com", "samakal.com", "jagonews24.com", "banglatribune.com")
+ASK_TAIL = "অনুগ্রহ করে নিউজের পুরো লেখা ও ছবি সরাসরি এখানে পাঠান, লিংক ছাড়া। ধন্যবাদ।"
+
+
+def ask_reporter(chat_id, reply_to, problem, tail=ASK_TAIL):
+    """Polite reply to the reporter's own message: what is wrong + what to send."""
+    if config().get("force_draft"):
+        return False
+    try:
+        tg("sendMessage", chat_id=chat_id, reply_to_message_id=reply_to, allow_sending_without_reply=True,
+           text=f"🙏 প্রিয় প্রতিনিধি, {problem}\n{tail}")
+        log(f"asked reporter {chat_id}/{reply_to}: {problem}")
+        return True
+    except Exception as e:
+        log(f"ask reporter failed: {e}")
+        return False
+
+
+def blocked_links(links):
+    doms = config().get("blocked_link_domains") or BLOCKED_LINK_DOMAINS
+    return bool(links) and all(any(d in l.lower() for d in doms) for l in links)
+
 
 def queue_one(d, item, art):
     """Code can't finish this story (link news / sensitive / no headline): keep it as a WordPress draft
     with everything Claude needs; claude_tasks.py lists and finishes these at 10:00 and 18:00."""
     st = art.get("story", {})
+    if (st.get("link_only") or not st.get("lines")) and blocked_links(st.get("links", [])):
+        # these sites block automatic reading: no draft, ask the reporter for text + photo instead
+        ask_reporter(item["chat_id"], st.get("msg") or item["first_message_id"],
+                     "আপনার পাঠানো লিংকের নিউজটি আমাদের এখান থেকে খোলা যাচ্ছে না, তাই প্রকাশ করা যায়নি।")
+        log(f"blocked link, reporter asked {item['id']}: {st.get('links')}")
+        return {"status": "skipped", "title": (st.get("links") or ["লিংক"])[0][:90]}
     media = []
     for fn in st.get("photos", []):
         try:

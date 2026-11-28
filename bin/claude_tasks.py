@@ -3,6 +3,7 @@
   python3 bin/claude_tasks.py list            -> queued drafts + new posts to proof-read; prints NOTHING if none
   python3 bin/claude_tasks.py finish <id> a.json   -> publish a queued draft (a.json = one article dict, RUN.md)
   python3 bin/claude_tasks.py drop <id> skip|reject "<reason>"
+  python3 bin/claude_tasks.py ask <id> "<সমস্যা>"  -> reply to the reporter (what is wrong, send text+photo), close draft
   python3 bin/claude_tasks.py fix <id> fixes.json  -> [[old, new], ...] small language fixes in the body
   python3 bin/claude_tasks.py reviewed        -> mark proof-reading done up to now
 """
@@ -103,6 +104,14 @@ def cmd_drop(pid, kind, reason=""):
     print("dropped", pid)
 
 
+def cmd_ask(pid, problem):
+    """OWNER RULE 2026-11-28: item can't be opened / has a problem we can't solve -> tell the sender."""
+    p, m = load_q(pid)
+    ok = wp_publish.ask_reporter(m["item"]["chat_id"], m.get("msg") or m["item"].get("first_message_id"), problem)
+    cmd_drop(pid, "skip", "প্রতিনিধিকে জানানো হয়েছে: " + problem)
+    print("asked" if ok else "ask FAILED", pid)
+
+
 def cmd_fix(pid, path):
     p = wp(f"/posts/{pid}", params={"context": "edit", "_fields": "content"})
     body = p["content"]["raw"]
@@ -122,4 +131,5 @@ def cmd_reviewed():
 if __name__ == "__main__":
     a = sys.argv[1:]
     {"list": lambda: cmd_list(), "pending": lambda: cmd_list(True), "finish": lambda: cmd_finish(a[1], a[2]), "drop": lambda: cmd_drop(*a[1:4]),
+     "ask": lambda: cmd_ask(a[1], a[2]),
      "fix": lambda: cmd_fix(a[1], a[2]), "reviewed": lambda: cmd_reviewed()}[a[0]]()
