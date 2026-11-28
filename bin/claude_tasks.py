@@ -7,6 +7,7 @@
   python3 bin/claude_tasks.py fix <id> fixes.json  -> [[old, new], ...] small language fixes in the body
   python3 bin/claude_tasks.py reviewed        -> mark proof-reading done up to now
 """
+import shutil
 import os, sys, re, json, html, datetime, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import *
@@ -73,7 +74,11 @@ def cmd_finish(pid, path):
     files = {x["file"]: x["url"] for x in m["media"]}
     fp = art.get("featured_photo")
     if fp and not str(fp).startswith("http"):
-        art["featured_photo"] = files.get(fp)  # URL -> publish_one downloads it
+        if os.path.isfile(fp):  # local file (e.g. converted .webp): copy it in, keep it
+            shutil.copy(fp, os.path.join(d, os.path.basename(fp)))
+            art["featured_photo"] = os.path.basename(fp)
+        else:
+            art["featured_photo"] = files.get(fp, fp)  # media name -> URL, publish_one downloads it
     bp = []
     for fn in art.get("body_photos", []):
         url = files.get(fn, fn)

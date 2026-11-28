@@ -1,0 +1,30 @@
+name: get-original-photos
+on:
+  workflow_dispatch:
+    inputs:
+      post_ids: {description: "space separated WP post ids", required: true}
+jobs:
+  get:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            state/telegram.json
+            state/schedule.json
+            inbox
+            done
+            logs
+          key: none-${{ github.run_id }}
+          restore-keys: bot-state-
+      - run: |
+          mkdir -p out
+          for id in ${{ github.event.inputs.post_ids }}; do
+            for f in $(grep -l -- "$id" done/*/articles.json done/*/result.json 2>/dev/null); do
+              d=$(dirname "$f"); mkdir -p "out/$id"; cp -r "$d" "out/$id/"; done
+          done
+          grep -h -- "${{ github.event.inputs.post_ids }}" logs/run.log | tail -5 || true
+          ls -R out | head -80
+      - uses: actions/upload-artifact@v4
+        with: {name: photos, path: out, retention-days: 3}

@@ -324,6 +324,9 @@ def publish_one(d, item, art, cfg):
             "slug": art.get("focus_keyword") or art.get("slug"), "categories": cats, "tags": tags, "status": "draft"}
     if featured:
         post["featured_media"] = featured["id"]
+    if not featured and not art.get("allow_no_photo"):  # FINAL CHECK (owner 2026-11-28): never live without a photo
+        art["needs_editor"] = True
+        art["editor_notes"] = (art.get("editor_notes", "") + " ছবি আপলোড হয়নি, তাই প্রকাশ হয়নি।").strip()
     risky = art.get("risk") in ("medium", "high") or art.get("needs_editor")
     if cfg.get("mode") == "publish" and not risky:
         post["status"] = "publish"
